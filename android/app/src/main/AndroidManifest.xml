@@ -5,7 +5,10 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- JVM 会使用指针的高位，关闭 Android 11+ 的堆指针标记，否则 JVM 启动即被系统终止（与 FCL 相同）。 -->
     <application
+        android:allowNativeHeapPointerTagging="false"
+        android:largeHeap="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
