@@ -35,9 +35,29 @@ final class GameRuntime {
         }
         return root;
     }
+    /**
+     * 与 FCL 的 RuntimeUtils.patchJava 相同：JRE 自带的 libawt_xawt.so 依赖桌面系统的 X11，在手机上无法加载，
+     * cacio 初始化 AWT 时会因此让 JVM 直接退出；用 APK 中编译的替代实现覆盖它。libjsound.so 同样替换为
+     * 使用 OpenAL 的实现。
+     */
+    private static void patchJava(File java, String nativeDir) throws IOException {
+        for (String name : new String[]{"libawt_xawt.so", "libjsound.so"}) {
+            File source = new File(nativeDir, name);
+            if (!source.isFile()) {
+                if (name.equals("libawt_xawt.so")) throw new IOException("APK 中缺少 " + name);
+                continue;
+            }
+            File target = new File(java, "lib/" + name);
+            if (target.isFile() && target.length() == source.length()) continue;
+            if (target.exists() && !target.delete()) throw new IOException("无法替换 " + target);
+            Files.copy(source.toPath(), target.toPath());
+        }
+    }
+
     static int launch(GameActivity activity, JSONObject request, File root, File log) throws Exception {
         String java = new File(root, "java17").getAbsolutePath();
         String nativeDir = activity.getApplicationInfo().nativeLibraryDir;
+        patchJava(new File(java), nativeDir);
         String natives = new File(root, "natives").getAbsolutePath();
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);

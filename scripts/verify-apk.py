@@ -11,7 +11,7 @@ def verify(path: Path) -> None:
         names = set(apk.namelist())
         required = {
             f"lib/arm64-v8a/lib{name}.so"
-            for name in ("pojavexec", "pojavexec_awt", "fcl", "androidnsbypass", "bytehook", "c++_shared")
+            for name in ("pojavexec", "pojavexec_awt", "fcl", "androidnsbypass", "bytehook", "c++_shared", "awt_xawt")
         }
         missing = required - names
         if missing:
