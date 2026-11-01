@@ -27,6 +27,9 @@ for name in ('MioLaunchWrapper.jar', 'MioLibPatcher.jar'):
     shutil.copy2(source / 'assets/game' / name, runtime / name)
 native = app / 'src/main/jniLibs/arm64-v8a'
 native.mkdir(parents=True, exist_ok=True)
+target_jna = runtime / 'natives/libjnidispatch.so'
+target_jna.parent.mkdir(exist_ok=True)
+shutil.copy2(source / 'assets/app_runtime/jna/5.13.0/natives/arm64-v8a/libjnidispatch.so', target_jna)
 shutil.copy2(source / 'jniLibs/arm64-v8a/libgl4es_114.so', native)
 for name in ('lwjgl-3.3.3-natives-release.aar', 'openal-soft-release.aar'):
     with zipfile.ZipFile(fcl / 'FCL/libs' / name) as aar:

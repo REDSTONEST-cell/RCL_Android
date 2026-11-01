@@ -74,6 +74,9 @@ final class GameRuntime {
         args.add("-Dorg.lwjgl.egl.libname=libEGL.so");
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");
         args.add("-Dorg.lwjgl.librarypath=" + natives);
+        args.add("-Djna.boot.library.path=" + natives);
+        args.add("-Djna.nosys=true");
+        args.add("-Djna.nounpack=true");
         args.add("-Dorg.lwjgl.system.allocator=system");
         args.add("-Dglfwstub.initEgl=false");
         args.add("-Dloader.disable_forked_guis=true");
