@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# 手机版显示信息（MainActivity.kt 中的 RclDisplay），页面通过 RclDisplay.info() 读取
+-keep class com.redstonest.redcraft.RclDisplay {
+  public <init>(...);
+
+  @android.webkit.JavascriptInterface public <methods>;
+}
