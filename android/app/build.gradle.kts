@@ -24,6 +24,7 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
+    ndkVersion = "27.0.12077973"
     namespace = "com.redstonest.redcraft"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
@@ -32,6 +33,14 @@ android {
         targetSdk = 34
         versionCode = rclVersion.getProperty("versionCode", "1").toInt()
         versionName = rclVersion.getProperty("versionName", "0.0.0")
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
     }
     signingConfigs {
         // 测试签名：密钥公开在仓库中，保证每次构建的签名一致、可以覆盖安装。
@@ -84,6 +93,16 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        prefab = true
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/jni/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    packaging {
+        jniLibs.pickFirsts += "**/libbytehook.so"
     }
 }
 
@@ -98,6 +117,7 @@ rust {
 }
 
 dependencies {
+    implementation("com.bytedance:bytehook:1.0.10")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

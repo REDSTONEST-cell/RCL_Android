@@ -1,3 +1,6 @@
 [submodule "red_craft"]
 	path = red_craft
 	url = https://github.com/REDSTONEST-cell/Red_Craft.git
+[submodule "vendor/fcl"]
+	path = vendor/fcl
+	url = https://github.com/FCL-Team/FoldCraftLauncher.git

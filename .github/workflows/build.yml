@@ -35,7 +35,7 @@ jobs:
       - name: 安装 Android SDK 与 NDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" "ndk;27.0.12077973" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
@@ -73,6 +73,9 @@ jobs:
           RCL_KEY_ALIAS: ${{ secrets.RCL_KEY_ALIAS }}
           RCL_KEY_PASSWORD: ${{ secrets.RCL_KEY_PASSWORD }}
         run: scripts/build.sh
+
+      - name: 检查 APK 启动层与架构
+        run: python3 scripts/verify-apk.py dist
 
       - uses: actions/upload-artifact@v7
         with:
