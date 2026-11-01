@@ -24,6 +24,11 @@ def verify(path: Path) -> None:
                 raise ValueError(f"不应打包的架构：{name}")
         if "assets/notices/FCL-LICENSE.txt" not in names:
             raise ValueError("缺少 FCL 许可文件")
+        for required_asset in ("java17/lib/server/libjvm.so", "java17/lib/libjli.so", "lwjgl/lwjgl-3.3.3-merged-modules.jar", "cacio/cacio-agent.jar", "MioLaunchWrapper.jar"):
+            if "assets/runtime/" + required_asset not in names:
+                raise ValueError(f"缺少游戏运行时：{required_asset}")
+        if "lib/arm64-v8a/libgl4es_114.so" not in names:
+            raise ValueError("缺少 GL4ES 渲染器")
         # ELF e_machine：AArch64 为 183，避免把其他架构的库误命名后混入。
         for name in sorted(required):
             header = apk.read(name)[:20]

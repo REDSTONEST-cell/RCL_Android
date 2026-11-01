@@ -31,6 +31,7 @@ mkdir -p "$gen/app/src/main/jni"
 (cd "$fcl/FCL/src/main/jni" && tar -cf - .) | (cd "$gen/app/src/main/jni" && tar -xf -)
 mkdir -p "$gen/app/src/main/assets/notices"
 cp "$fcl/LICENSE" "$gen/app/src/main/assets/notices/FCL-LICENSE.txt"
+python3 "$root/scripts/prepare-runtime.py" "$fcl" "$gen/app"
 
 cd "$root/red_craft"
 pnpm install --frozen-lockfile

@@ -46,6 +46,7 @@ class MainActivity : TauriActivity() {
     if (!BuildConfig.DEBUG) webView.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
     // 页面通过 RclDisplay.info() 读取可用尺寸与挖孔区域，变化时再主动通知页面
     webView.addJavascriptInterface(displayInfo, "RclDisplay")
+    webView.addJavascriptInterface(GameHost(this), "RclGame")
     ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
       onInsets(v, insets)
       WindowInsetsCompat.CONSUMED

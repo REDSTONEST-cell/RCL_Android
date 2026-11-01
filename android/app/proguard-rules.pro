@@ -1,4 +1,9 @@
 # Add project specific ProGuard rules here.
+-keep class com.redstonest.redcraft.GameHost { *; }
+-keep class com.redstonest.redcraft.GameActivity { *; }
+-keep class com.tungsten.fclauncher.bridge.FCLBridge { *; }
+-keep class org.lwjgl.glfw.CallbackBridge { *; }
+-keep class com.oracle.dalvik.VMLauncher { *; }
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

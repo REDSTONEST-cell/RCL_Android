@@ -102,6 +102,7 @@ android {
         }
     }
     packaging {
+        jniLibs.useLegacyPackaging = true
         jniLibs.pickFirsts += "**/libbytehook.so"
     }
 }
