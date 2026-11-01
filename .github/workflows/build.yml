@@ -79,7 +79,7 @@ jobs:
 
       - name: 检查 JNI 宿主回调签名
         working-directory: red_craft/src-tauri/gen/android
-        run: ./gradlew :app:testUniversalReleaseUnitTest -PabiList=arm64-v8a -ParchList=arm64 -PtargetList=aarch64 -x :app:rustBuildArm64Release
+        run: ./gradlew :app:testUniversalReleaseUnitTest -Pandroid.onlyEnableUnitTestForTheTestedBuildType=false -PabiList=arm64-v8a -ParchList=arm64 -PtargetList=aarch64 -x :app:rustBuildArm64Release
 
       - uses: actions/upload-artifact@v7
         with:
