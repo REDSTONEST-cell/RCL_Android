@@ -61,15 +61,20 @@ final class GameRuntime {
         for (String lib : new String[]{"libjli.so", "server/libjvm.so", "libfreetype.so", "libverify.so", "libjava.so", "libnet.so", "libnio.so", "libawt.so", "libawt_headless.so", "libfontmanager.so"})
             bridge.dlopen(java + "/lib/" + lib);
         if (bridge.dlopen(nativeDir + "/libgl4es_114.so") == 0) throw new IOException("无法加载 GL4ES 渲染器");
-        bridge.dlopen(nativeDir + "/libopenal.so");
+        if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
+        activity.appendLog("[RCL] 准备绑定游戏 Surface\n");
+        if (activity.surface == null || !activity.surface.isValid()) throw new IOException("游戏画面 Surface 已失效");
         org.lwjgl.glfw.CallbackBridge.setupBridgeWindow(activity.surface);
+        activity.appendLog("[RCL] Surface 绑定完成，准备设置画面尺寸\n");
         org.lwjgl.glfw.CallbackBridge.nativeSendScreenSize(activity.width, activity.height);
+        activity.appendLog("[RCL] 画面尺寸设置完成，准备生成 JVM 参数\n");
         activity.inputReady = true;
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
         args.add("-Duser.home=" + request.getString("cwd"));
         args.add("-Djava.io.tmpdir=" + activity.getCacheDir().getAbsolutePath());
+        args.add("-XX:ErrorFile=" + new File(log.getParentFile(), "hs_err_pid%p.log").getAbsolutePath());
         args.add("-Dorg.lwjgl.opengl.libname=" + nativeDir + "/libgl4es_114.so");
         args.add("-Dorg.lwjgl.egl.libname=libEGL.so");
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");
@@ -115,8 +120,13 @@ final class GameRuntime {
             if (arg.equals(request.getString("mainClass"))) args.add("mio.Wrapper");
             args.add(arg);
         }
+        activity.appendLog("[RCL] JVM 参数生成完成，准备设置退出回调\n");
         bridge.setupExitTrap(bridge);
+        activity.appendLog("[RCL] 退出回调设置完成，准备初始化本地 hooks\n");
         FCLBridge.initializeHooks();
-        return VMLauncher.launchJVM(args.toArray(new String[0]));
+        activity.appendLog("[RCL] 本地 hooks 初始化完成，准备调用 JVM\n");
+        int code = VMLauncher.launchJVM(args.toArray(new String[0]));
+        activity.appendLog("[RCL] JVM 调用返回，退出码 " + code + "\n");
+        return code;
     }
 }

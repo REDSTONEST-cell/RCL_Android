@@ -105,12 +105,24 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     }
     public synchronized void exitGame(int code) {
         inputReady = false;
+        if (sessionDir != null) {
+            File[] reports = sessionDir.listFiles((dir,name) -> name.startsWith("hs_err_pid") && name.endsWith(".log"));
+            if (reports != null) for (File report : reports) {
+                try (InputStream in = new FileInputStream(report)) {
+                    byte[] bytes = new byte[128 * 1024];
+                    int length = in.read(bytes);
+                    if (length > 0) appendLog("\n[RCL] JVM 崩溃报告：" + report.getName() + "\n" + new String(bytes,0,length,StandardCharsets.UTF_8));
+                } catch(IOException ignored) {}
+            }
+        }
         try { writeStatus("exited",code); } catch(Exception ignored) {}
         runOnUiThread(() -> { finish(); android.os.Process.killProcess(android.os.Process.myPid()); });
     }
     private void showError(Throwable error) {
         if (sessionDir != null) try {
-            appendLog("\n" + error + "\n");
+            StringWriter trace = new StringWriter();
+            error.printStackTrace(new PrintWriter(trace));
+            appendLog("\n" + trace + "\n");
             writeStatus("exited",-1);
         } catch(Exception ignored) {}
         runOnUiThread(() -> {
