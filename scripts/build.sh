@@ -8,6 +8,9 @@
 # 构建时把 android/ 复制到 red_craft/src-tauri/gen/android，再由 Tauri 打包。
 set -euo pipefail
 
+# 与电脑版使用同一个公开的 Azure 应用；仍允许构建环境显式覆盖。
+export REDCRAFT_MS_CLIENT_ID="${REDCRAFT_MS_CLIENT_ID:-3b8bb0ce-d514-42fe-83b6-bb374eb8b665}"
+
 root=$(cd "$(dirname "$0")/.." && pwd)
 gen="$root/red_craft/src-tauri/gen/android"
 
