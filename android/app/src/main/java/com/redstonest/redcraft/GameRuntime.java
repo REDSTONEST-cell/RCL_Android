@@ -39,11 +39,12 @@ final class GameRuntime {
         String java = new File(root, "java17").getAbsolutePath();
         String nativeDir = activity.getApplicationInfo().nativeLibraryDir;
         String natives = new File(root, "natives").getAbsolutePath();
-        String libraryPath = java + "/lib:" + java + "/lib/server:" + natives + ":" + nativeDir + ":/system/lib64:/vendor/lib64";
+        String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
+        String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
         FCLBridge bridge = new FCLBridge();
         String[][] env = {
             {"JAVA_HOME", java}, {"HOME", request.getString("cwd")}, {"TMPDIR", activity.getCacheDir().getAbsolutePath()},
-            {"LD_LIBRARY_PATH", libraryPath}, {"PATH", java + "/bin:/system/bin"},
+            {"LD_LIBRARY_PATH", environmentPath}, {"PATH", java + "/bin:/system/bin"},
             {"FCL_NATIVEDIR", nativeDir}, {"POJAV_NATIVEDIR", nativeDir},
             {"POJAV_RENDERER", "opengles2"}, {"POJAVEXEC_EGL", "libEGL.so"},
             {"LIBGL_ES", "2"}, {"LIBGL_MIPMAP", "3"}, {"LIBGL_NORMALIZE", "1"}, {"LIBGL_NOERROR", "1"},
@@ -125,6 +126,7 @@ final class GameRuntime {
         activity.appendLog("[RCL] 退出回调设置完成，准备初始化本地 hooks\n");
         FCLBridge.initializeHooks();
         activity.appendLog("[RCL] 本地 hooks 初始化完成，准备调用 JVM\n");
+        activity.appendLog("[RCL] JLI 环境检查：LD_LIBRARY_PATH 不含 JRE；链接器已设置 JRE 库路径\n");
         int code = VMLauncher.launchJVM(args.toArray(new String[0]));
         activity.appendLog("[RCL] JVM 调用返回，退出码 " + code + "\n");
         return code;
