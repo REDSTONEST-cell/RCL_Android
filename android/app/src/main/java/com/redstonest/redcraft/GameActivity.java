@@ -25,6 +25,9 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         super.onCreate(saved);
         current = this;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // 画面延伸到刘海/挖孔区域，否则横屏时刘海一侧会留一条黑边。
+        if (android.os.Build.VERSION.SDK_INT >= 28)
+            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         getWindow().getDecorView().setSystemUiVisibility(5894);
         String session = getIntent().getStringExtra("session");
         if (session == null || !session.matches("[0-9a-f-]{36}")) { finish(); return; }
@@ -75,7 +78,18 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         controls.addView(actions);
         FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(-2,-2, Gravity.BOTTOM | Gravity.LEFT);
         frame.addView(controls, position);
+        // 按键避开刘海，画面本身仍然铺满全屏。
+        if (android.os.Build.VERSION.SDK_INT >= 28) controls.setOnApplyWindowInsetsListener((v, insets) -> {
+            DisplayCutout cutout = insets.getDisplayCutout();
+            v.setPadding(cutout == null ? 0 : cutout.getSafeInsetLeft(), 0, 0, cutout == null ? 0 : cutout.getSafeInsetBottom());
+            return insets;
+        });
         setContentView(frame);
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // 下拉通知栏等操作后系统栏会重新出现，回到游戏时重新隐藏。
+        if (hasFocus) getWindow().getDecorView().setSystemUiVisibility(5894);
     }
     private LinearLayout keyRow(String[] names, int[] keys) {
         LinearLayout row = new LinearLayout(this);
