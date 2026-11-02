@@ -1,5 +1,6 @@
 package com.redstonest.redcraft
 
+import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
@@ -18,6 +19,7 @@ import kotlin.math.max
 
 class MainActivity : TauriActivity() {
   private var webView: WebView? = null
+  private var gameHost: GameHost? = null
   private val displayInfo = RclDisplay()
   private var rotation = -1
 
@@ -46,7 +48,9 @@ class MainActivity : TauriActivity() {
     if (!BuildConfig.DEBUG) webView.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
     // 页面通过 RclDisplay.info() 读取可用尺寸与挖孔区域，变化时再主动通知页面
     webView.addJavascriptInterface(displayInfo, "RclDisplay")
-    webView.addJavascriptInterface(GameHost(this), "RclGame")
+    val host = GameHost(this, webView)
+    gameHost = host
+    webView.addJavascriptInterface(host, "RclGame")
     ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
       onInsets(v, insets)
       WindowInsetsCompat.CONSUMED
@@ -54,6 +58,14 @@ class MainActivity : TauriActivity() {
     window.decorView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
       if (r - l != or - ol || b - t != ob - ot) publish()
     }
+  }
+
+  // 系统文件选择器 / 保存位置选择的结果交给 GameHost（存档、Mod 等的导入导出）
+  @Deprecated("Deprecated in Java")
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    if (gameHost?.onActivityResult(requestCode, resultCode, data) == true) return
+    @Suppress("DEPRECATION")
+    super.onActivityResult(requestCode, resultCode, data)
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
