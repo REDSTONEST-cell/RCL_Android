@@ -5,11 +5,11 @@
 
 RCL 的修改：
 
-- `JVMActivity`：去掉联机（Terracotta）、前台服务、语音朗读与 SDL；新增 `onGameExit`，由 RCL 的 `GameActivity` 把退出码写回启动器。
+- `JVMActivity`：去掉联机（Terracotta）、前台服务与语音朗读；新增 `onGameExit`，由 RCL 的 `GameActivity` 把退出码写回启动器。
 - `GameMenu`：去掉 TouchController 与联机菜单；记住选择的按键布局；游戏日志只追加写入。
 - 悬浮菜单按钮的图标换成 RCL 的图标（`R.drawable.rcl_menu_button`）。
 - `FCLApp`、`FCLPath`、`AndroidUtil.kt`、`AppSettings.kt`、主题相关类改为精简实现：路径都在应用私有目录，主题固定为 RCL 配色，不使用 DataStore。
-- `SdlBridge`、`SDLActivity`、`GamepadModePromptDialog` 为空实现（手机版不打包 SDL）。
+- SDL3 支持（`org.libsdl.app`、`SdlBridge`）原样保留，用于 26.3 起的版本；`GamepadModePromptDialog` 为空实现（不提示选择手柄输入方式，手柄使用按键映射）。
 - `FCLBridge.openLink` 只打开网页与邮件链接。
 - 资源（`res/`）是从源码引用的资源计算出的子集；`values/fcl_ids.xml` 补充了代码用到但未复制布局中的 id。
 
