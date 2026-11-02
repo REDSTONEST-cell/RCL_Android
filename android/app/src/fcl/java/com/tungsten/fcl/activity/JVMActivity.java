@@ -37,6 +37,7 @@ import com.tungsten.fclauncher.keycodes.LwjglGlfwKeycode;
 import com.tungsten.fclcore.util.Logging;
 import com.tungsten.fcllibrary.component.FCLActivity;
 
+import org.libsdl.app.SDLActivity;
 import org.lwjgl.glfw.CallbackBridge;
 
 import java.util.Objects;
@@ -359,6 +360,9 @@ public class JVMActivity extends FCLActivity implements TextureView.SurfaceTextu
     public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surfaceTexture) {
         fclBridge.setSurfaceDestroyed(true);
         gameSurface = null;
+        if (SdlBridge.getSdlEnabled() && SDLActivity.getSDLSurface() != null) {
+            SDLActivity.getSDLSurface().surfaceDestroyed();
+        }
         return true;
     }
 
@@ -511,6 +515,19 @@ public class JVMActivity extends FCLActivity implements TextureView.SurfaceTextu
     @Override
     public void setRequestedOrientation(int requestedOrientation) {
         super.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    }
+
+    /**
+     * SDL 原生层（Android_JNI_ShowMessageBox）会在宿主对象的运行时类上按名
+     * 查找 messageboxShowMessageBox；本宿主非 SDLActivity 子类，必须桥接到
+     * SDLActivity 的静态实现，否则查找失败会带着 pending 异常触发 JniAbort
+     */
+    @androidx.annotation.Keep
+    public int messageboxShowMessageBox(int flags, String title, String message,
+                                        int[] buttonFlags, int[] buttonIds,
+                                        String[] buttonTexts, int[] colors) {
+        return SDLActivity.messageboxShowMessageBox(this, flags, title, message,
+                buttonFlags, buttonIds, buttonTexts, colors);
     }
 
     /**

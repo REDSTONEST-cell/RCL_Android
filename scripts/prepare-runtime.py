@@ -100,10 +100,11 @@ target_jna = runtime / 'natives/libjnidispatch.so'
 target_jna.parent.mkdir(exist_ok=True)
 shutil.copy2(source / 'assets/app_runtime/jna/5.13.0/natives/arm64-v8a/libjnidispatch.so', target_jna)
 shutil.copy2(source / 'jniLibs/arm64-v8a/libgl4es_114.so', native)
-# 渲染器、LWJGL 与 OpenAL 的本地库（NG-GL4ES 与 spirv-cross 用于 1.21.5 及更新的版本）
+# 渲染器、LWJGL、OpenAL 与 SDL 的本地库：
+# NG-GL4ES 与 spirv-cross 用于 1.21.5 ~ 26.2；26.3 起游戏改用 SDL3 管理窗口，渲染器使用 MobileGlues
 natives_dir = {'lwjgl-3.4.1-natives-release.aar': 'natives-3.4.1'}
-for name in ('NG-GL4ES-release.aar', 'spirv-cross-natives.aar', 'lwjgl-3.3.3-natives-release.aar',
-             'lwjgl-3.4.1-natives-release.aar', 'openal-soft-release.aar'):
+for name in ('NG-GL4ES-release.aar', 'spirv-cross-natives.aar', 'MobileGlues-release.aar', 'SDL-release.aar',
+             'lwjgl-3.3.3-natives-release.aar', 'lwjgl-3.4.1-natives-release.aar', 'openal-soft-release.aar'):
     with zipfile.ZipFile(fcl / 'FCL/libs' / name) as aar:
         for entry in aar.namelist():
             if not entry.endswith('.so') or '/arm64-v8a/' not in entry:
@@ -123,3 +124,9 @@ for version in (17, 21, 25):
 for required in ('lwjgl-3.4.1/lwjgl-3.4.1-merged-modules.jar', 'lwjgl-3.4.1/lwjgl.jar', 'natives-3.4.1/liblwjgl.so', 'jna/5.17.0/libjnidispatch.so'):
     if not (runtime / required).is_file():
         raise ValueError(f'运行时缺少 {required}')
+
+# MobileGlues 使用 LGPL-2.1，随 APK 附带其许可
+with zipfile.ZipFile(fcl / 'FCL/libs/MobileGlues-release.aar') as aar:
+    notices = app / 'src/main/assets/notices'
+    notices.mkdir(parents=True, exist_ok=True)
+    (notices / 'MobileGlues-LGPL-2.1.txt').write_bytes(aar.read('assets/licenses/mobileglues-lgplv2.1-license.txt'))

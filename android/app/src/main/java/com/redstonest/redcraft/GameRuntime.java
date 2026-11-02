@@ -139,6 +139,25 @@ final class GameRuntime {
         return 0;
     }
 
+    /**
+     * 与 FCL 相同：26.3 起关闭 NeoForge / Forge 的 FML 早期加载画面（它在启动期反复分配图形缓冲，
+     * 会与启动器界面互相阻塞）。键写在 fml.toml 开头，FML 加载后会按规范补全其余内容。
+     */
+    private static void disableEarlyWindow(String cwd) {
+        File toml = new File(cwd, "config/fml.toml");
+        try {
+            StringBuilder text = new StringBuilder("earlyWindowControl = false\n");
+            if (toml.isFile()) {
+                for (String line : Files.readAllLines(toml.toPath(), java.nio.charset.StandardCharsets.UTF_8))
+                    if (!line.strip().startsWith("earlyWindowControl")) text.append(line).append('\n');
+            } else if (!toml.getParentFile().isDirectory() && !toml.getParentFile().mkdirs()) {
+                return;
+            }
+            Files.write(toml.toPath(), text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException ignored) {
+        }
+    }
+
     /** 与 FCL 相同：关闭旧版 Forge 的启动动画（它会自己创建窗口，在手机上无法显示）。 */
     private static void disableForgeSplash(String cwd) {
         File config = new File(cwd, "config");
@@ -167,18 +186,31 @@ final class GameRuntime {
         String jna = jnaDirectory(root, original, natives);
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
-        // 渲染器：GL4ES 支持到 1.21.4；更新的版本使用 NG-GL4ES（环境变量与 FCL 相同）
-        boolean ng = "ng_gl4es".equals(request.optString("renderer", "gl4es"));
-        String glLibrary = nativeDir + (ng ? "/libng_gl4es.so" : "/libgl4es_114.so");
+        // 渲染器（环境变量与 FCL 相同）：GL4ES 支持到 1.21.4，NG-GL4ES 用于 1.21.5 ~ 26.2，
+        // 26.3 起游戏改用 SDL3 管理窗口，使用 MobileGlues
+        String renderer = request.optString("renderer", "gl4es");
+        boolean ng = "ng_gl4es".equals(renderer);
+        boolean mg = "mobileglues".equals(renderer);
+        String rendererName = mg ? "MobileGlues" : ng ? "NG-GL4ES" : "GL4ES";
+        String glLibrary = nativeDir + (mg ? "/libmobileglues.so" : ng ? "/libng_gl4es.so" : "/libgl4es_114.so");
+        String eglLibrary = mg ? glLibrary : "libEGL.so";
         String[][] env = {
             {"JAVA_HOME", java}, {"HOME", cwd}, {"TMPDIR", activity.getCacheDir().getAbsolutePath()},
             {"LD_LIBRARY_PATH", environmentPath}, {"PATH", java + "/bin:/system/bin"},
-            {"FCL_NATIVEDIR", nativeDir}, {"POJAV_NATIVEDIR", nativeDir}, {"POJAVEXEC_EGL", "libEGL.so"},
+            {"FCL_NATIVEDIR", nativeDir}, {"POJAV_NATIVEDIR", nativeDir}, {"POJAVEXEC_EGL", mg ? "libmobileglues.so" : "libEGL.so"},
             {"LIBGL_NORMALIZE", "1"}, {"LIBGL_NOINTOVLHACK", "1"}, {"LIBGL_NOERROR", "1"},
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
-        if (ng) {
+        if (mg) {
+            bridge.setenv("POJAV_RENDERER", "opengles3_mobileglues");
+            bridge.setenv("LIBGL_ES", "3");
+            bridge.setenv("LIBGL_EGL", "libmobileglues.so");
+            // MobileGlues 的配置目录放在应用私有存储，不使用 /sdcard/MG
+            File mgDir = new File(activity.getFilesDir(), "mobileglues");
+            if (!mgDir.isDirectory() && !mgDir.mkdirs()) throw new IOException("无法创建 MobileGlues 配置目录");
+            bridge.setenv("MG_DIR_PATH", mgDir.getAbsolutePath());
+        } else if (ng) {
             bridge.setenv("POJAV_RENDERER", "opengles3");
             bridge.setenv("LIBGL_ES", "3");
             bridge.setenv("LIBGL_GL", "31");
@@ -189,6 +221,9 @@ final class GameRuntime {
             bridge.setenv("LIBGL_ES", "2");
             bridge.setenv("LIBGL_MIPMAP", "3");
         }
+        // SDL3 自行创建 GL 上下文，需要渲染器 GL / EGL 库的绝对路径（与 FCL 相同：EGL 只在渲染器自带时设置）
+        bridge.setenv("SDL_OPENGL_LIBRARY", glLibrary);
+        if (mg) bridge.setenv("SDL_EGL_LIBRARY", glLibrary);
         org.lwjgl.glfw.CallbackBridge.nativeSetUseInputStackQueue(true);
         bridge.setenv("DALVIK_JAVAVM", Long.toString(FCLBridge.getJavaVMPointer()));
         bridge.setenv("DALVIK_APPLICATION", FCLBridge.jObjectToString(activity.getApplicationContext()));
@@ -197,9 +232,10 @@ final class GameRuntime {
         for (String lib : new String[]{"libjli.so", "server/libjvm.so", "libfreetype.so", "libverify.so", "libjava.so", "libnet.so", "libnio.so", "libawt.so", "libawt_headless.so", "libfontmanager.so"})
             bridge.dlopen(java + "/lib/" + lib);
         if (ng && bridge.dlopen(nativeDir + "/libspirv-cross-c-shared.so") == 0) throw new IOException("无法加载 NG-GL4ES 的着色器转换库");
-        if (bridge.dlopen(glLibrary) == 0) throw new IOException("无法加载 " + (ng ? "NG-GL4ES" : "GL4ES") + " 渲染器");
+        if (bridge.dlopen(glLibrary) == 0) throw new IOException("无法加载 " + rendererName + " 渲染器");
         if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
         disableForgeSplash(cwd);
+        if (request.optBoolean("disableEarlyWindow", false)) disableEarlyWindow(cwd);
         if (lwjgl341) {
             // 26.x 可以选择 Vulkan 绘图；手机版的渲染器是 OpenGL，固定使用 OpenGL
             com.tungsten.fcl.setting.GameOption option = new com.tungsten.fcl.setting.GameOption(cwd);
@@ -207,7 +243,7 @@ final class GameRuntime {
             option.save();
         }
         File resolv = writeResolvConf(activity, root);
-        activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · LWJGL " + (lwjgl341 ? "3.4.1" : "3.3.3") + " · " + (ng ? "NG-GL4ES" : "GL4ES") + " · JNA " + new File(jna).getName() + "，画面尺寸 " + width + "x" + height + "\n");
+        activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · LWJGL " + (lwjgl341 ? "3.4.1" : "3.3.3") + " · " + rendererName + " · JNA " + new File(jna).getName() + "，画面尺寸 " + width + "x" + height + "\n");
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
@@ -218,7 +254,7 @@ final class GameRuntime {
         args.add("-Dext.net.resolvPath=" + resolv.getAbsolutePath());
         args.add("-Dos.name=Linux");
         args.add("-Dorg.lwjgl.opengl.libname=" + glLibrary);
-        args.add("-Dorg.lwjgl.egl.libname=libEGL.so");
+        args.add("-Dorg.lwjgl.egl.libname=" + eglLibrary);
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");
         args.add("-Dorg.lwjgl.librarypath=" + natives);
         if (new File(natives, "libfreetype.so").isFile()) args.add("-Dorg.lwjgl.freetype.libname=" + natives + "/libfreetype.so");

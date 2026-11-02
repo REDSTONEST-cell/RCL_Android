@@ -25,6 +25,7 @@ import com.tungsten.fclauncher.keycodes.LwjglKeycodeMap;
 import com.tungsten.fclcore.util.Logging;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLSurface;
 
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
@@ -87,7 +88,34 @@ public class CallbackBridge {
         }
         switch (type) {
             case NOTIF_TYPE_SDL:
-                // RCL 没有打包 SDL，游戏会回退到 GLFW 输入。
+                if (action[0] == ACTION_INIT_LAUNCHER_INTEGRATION) {
+                    if (!SdlBridge.markSdlInitialized()) {
+                        return true;
+                    }
+                    try {
+                        Logging.LOG.log(Level.INFO, "FCL: loading SDL3");
+                        System.loadLibrary("SDL3");
+                        Logging.LOG.log(Level.INFO, "FCL: loading SDL2");
+                        System.loadLibrary("SDL2");
+                        Logging.LOG.log(Level.INFO, "FCL: setting up SDL JNI");
+                        SdlBridge.setupJNI();
+                        Logging.LOG.log(Level.INFO, "FCL: binding SDL surface");
+                        SdlBridge.setSdlEnabled(true);
+                        SDLSurface surface = SDLActivity.getSDLSurface();
+                        if (surface != null) {
+                            surface.surfaceChanged();
+                            if (windowWidth > 0 && windowHeight > 0) {
+                                surface.nativeResize(windowWidth, windowHeight);
+                            }
+                        }
+                        Logging.LOG.log(Level.INFO, "FCL: SDL support enabled!");
+                        return true;
+                    } catch (Throwable e) {
+                        SdlBridge.setSdlEnabled(false);
+                        SdlBridge.clearSdlInitialized();
+                        Logging.LOG.log(Level.WARNING, "FCL: SDL launcher integration is unavailable", e);
+                    }
+                }
                 if (action[0] == ACTION_SEND_TEXTBOX_RECT) {
                     // TODO: 输入框位置同步（后续接入）
                 }
