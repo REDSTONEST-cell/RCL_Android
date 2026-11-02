@@ -24,7 +24,7 @@ def verify(path: Path) -> None:
                 raise ValueError(f"不应打包的架构：{name}")
         if "assets/notices/FCL-LICENSE.txt" not in names:
             raise ValueError("缺少 FCL 许可文件")
-        for required_asset in ("java17/lib/server/libjvm.so", "java17/lib/libjli.so", "java21/lib/server/libjvm.so", "java21/lib/libjli.so", "lwjgl/lwjgl-3.3.3-merged-modules.jar", "cacio/cacio-agent.jar", "MioLaunchWrapper.jar"):
+        for required_asset in ("java17/lib/server/libjvm.so", "java17/lib/libjli.so", "java21/lib/server/libjvm.so", "java21/lib/libjli.so", "java25/lib/server/libjvm.so", "java25/lib/libjli.so", "lwjgl-3.4.1/lwjgl-3.4.1-merged-modules.jar", "natives-3.4.1/liblwjgl.so", "jna/5.17.0/libjnidispatch.so", "lwjgl/lwjgl-3.3.3-merged-modules.jar", "cacio/cacio-agent.jar", "MioLaunchWrapper.jar"):
             if "assets/runtime/" + required_asset not in names:
                 raise ValueError(f"缺少游戏运行时：{required_asset}")
         if "lib/arm64-v8a/libgl4es_114.so" not in names:

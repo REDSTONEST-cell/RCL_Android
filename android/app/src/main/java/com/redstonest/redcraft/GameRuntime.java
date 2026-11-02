@@ -30,7 +30,7 @@ final class GameRuntime {
         }
     }
     /** APK 中打包的 Java 运行时（目录名）。 */
-    static final String[] JAVA_RUNTIMES = {"java17", "java21"};
+    static final String[] JAVA_RUNTIMES = {"java17", "java21", "java25"};
 
     /**
      * 把运行时从 APK 复制到应用目录。每个应用版本使用自己的目录，避免更新中断留下不完整的运行时；
@@ -113,6 +113,32 @@ final class GameRuntime {
         }
     }
 
+    /**
+     * 选择与游戏使用的 JNA 版本一致的本地库（版本不一致时 JNA 会报「incompatible JNA native library」）。
+     * 没有完全相同的版本时，选择不低于它的最近版本，再不行用最新的。
+     */
+    private static String jnaDirectory(File root, JSONArray args, String fallback) throws Exception {
+        String wanted = null;
+        for (int i = 0; i < args.length(); i++) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("/net/java/dev/jna/jna/([0-9.]+)/jna-").matcher(args.getString(i));
+            if (m.find()) { wanted = m.group(1); break; }
+        }
+        File[] dirs = new File(root, "jna").listFiles(File::isDirectory);
+        if (dirs == null || dirs.length == 0) return fallback;
+        Arrays.sort(dirs, (a, b) -> compareVersion(a.getName(), b.getName()));
+        if (wanted != null) for (File dir : dirs) if (compareVersion(dir.getName(), wanted) >= 0) return dir.getAbsolutePath();
+        return dirs[dirs.length - 1].getAbsolutePath();
+    }
+
+    private static int compareVersion(String a, String b) {
+        String[] pa = a.split("\\."), pb = b.split("\\.");
+        for (int i = 0; i < Math.max(pa.length, pb.length); i++) {
+            int x = i < pa.length ? Integer.parseInt(pa[i]) : 0, y = i < pb.length ? Integer.parseInt(pb[i]) : 0;
+            if (x != y) return Integer.compare(x, y);
+        }
+        return 0;
+    }
+
     /** 与 FCL 相同：关闭旧版 Forge 的启动动画（它会自己创建窗口，在手机上无法显示）。 */
     private static void disableForgeSplash(String cwd) {
         File config = new File(cwd, "config");
@@ -133,7 +159,12 @@ final class GameRuntime {
         String cwd = request.getString("cwd");
         File log = new File(bridge.getLogPath());
         patchJava(new File(java), nativeDir);
-        String natives = new File(root, "natives").getAbsolutePath();
+        // LWJGL：26.x 使用 3.4.1，更早的版本使用 3.3.3
+        boolean lwjgl341 = "3.4.1".equals(request.optString("lwjgl", "3.3.3"));
+        String natives = new File(root, lwjgl341 ? "natives-3.4.1" : "natives").getAbsolutePath();
+        File lwjglDir = new File(root, lwjgl341 ? "lwjgl-3.4.1" : "lwjgl");
+        JSONArray original = request.getJSONArray("args");
+        String jna = jnaDirectory(root, original, natives);
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
         // 渲染器：GL4ES 支持到 1.21.4；更新的版本使用 NG-GL4ES（环境变量与 FCL 相同）
@@ -169,8 +200,14 @@ final class GameRuntime {
         if (bridge.dlopen(glLibrary) == 0) throw new IOException("无法加载 " + (ng ? "NG-GL4ES" : "GL4ES") + " 渲染器");
         if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
         disableForgeSplash(cwd);
+        if (lwjgl341) {
+            // 26.x 可以选择 Vulkan 绘图；手机版的渲染器是 OpenGL，固定使用 OpenGL
+            com.tungsten.fcl.setting.GameOption option = new com.tungsten.fcl.setting.GameOption(cwd);
+            option.set("preferredGraphicsBackend", "opengl");
+            option.save();
+        }
         File resolv = writeResolvConf(activity, root);
-        activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · " + (ng ? "NG-GL4ES" : "GL4ES") + "，画面尺寸 " + width + "x" + height + "\n");
+        activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · LWJGL " + (lwjgl341 ? "3.4.1" : "3.3.3") + " · " + (ng ? "NG-GL4ES" : "GL4ES") + " · JNA " + new File(jna).getName() + "，画面尺寸 " + width + "x" + height + "\n");
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
@@ -185,7 +222,9 @@ final class GameRuntime {
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");
         args.add("-Dorg.lwjgl.librarypath=" + natives);
         if (new File(natives, "libfreetype.so").isFile()) args.add("-Dorg.lwjgl.freetype.libname=" + natives + "/libfreetype.so");
-        args.add("-Djna.boot.library.path=" + natives);
+        args.add("-Djna.boot.library.path=" + jna);
+        args.add("-Dorg.lwjgl.vulkan.libname=libvulkan.so");
+        args.add("-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared");
         args.add("-Djna.nosys=true");
         args.add("-Djna.nounpack=true");
         args.add("-Dorg.lwjgl.system.allocator=system");
@@ -213,13 +252,12 @@ final class GameRuntime {
         args.add("-Xbootclasspath/a:" + String.join(":", boot));
         String mainClass = request.getString("mainClass");
         boolean wrapped = false;
-        JSONArray original = request.getJSONArray("args");
         for (int i = 0; i < original.length(); i++) {
             String arg = original.getString(i);
             if (arg.equals("-cp") || arg.equals("-classpath")) {
                 args.add(arg);
                 ArrayList<String> cp = new ArrayList<>();
-                File[] lwjgl = new File(root, "lwjgl").listFiles((dir, name) -> name.endsWith(".jar"));
+                File[] lwjgl = lwjglDir.listFiles((dir, name) -> name.endsWith(".jar"));
                 if (lwjgl != null) for (File jar : lwjgl) cp.add(jar.getAbsolutePath());
                 cp.add(new File(root, "MioLaunchWrapper.jar").getAbsolutePath());
                 for (String entry : original.getString(++i).split(":"))
