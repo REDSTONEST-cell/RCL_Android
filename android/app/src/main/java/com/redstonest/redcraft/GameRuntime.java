@@ -1,6 +1,9 @@
 package com.redstonest.redcraft;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
 import com.oracle.dalvik.VMLauncher;
 import com.tungsten.fclauncher.bridge.FCLBridge;
 import org.json.JSONArray;
@@ -24,16 +27,69 @@ final class GameRuntime {
             if (!target.setExecutable(true, true)) throw new IOException("无法设置运行时文件权限");
         }
     }
-    static File install(Context context) throws IOException {
-        // 每个应用版本使用自己的目录，避免更新中断留下不完整的运行时。
+    /** APK 中打包的 Java 运行时（目录名）。 */
+    static final String[] JAVA_RUNTIMES = {"java17", "java21"};
+
+    /**
+     * 把运行时从 APK 复制到应用目录。每个应用版本使用自己的目录，避免更新中断留下不完整的运行时；
+     * 各个 Java 只在第一次使用时复制，旧版本留下的运行时目录一并删除。
+     */
+    static File install(Context context, String java) throws IOException {
+        if (!Arrays.asList(JAVA_RUNTIMES).contains(java)) throw new IOException("不支持的 Java 运行时：" + java);
         File root = new File(context.getFilesDir(), "runtime-" + BuildConfig.VERSION_CODE);
+        File[] old = context.getFilesDir().listFiles((dir, name) -> name.startsWith("runtime-") && !name.equals(root.getName()));
+        if (old != null) for (File dir : old) deleteTree(dir);
         File marker = new File(root, ".ready");
         if (!marker.isFile()) {
-            copyAssets(context, "runtime", root);
-            if (!new File(root, "java17/lib/server/libjvm.so").isFile()) throw new IOException("Java 17 运行时不完整");
+            String[] children = context.getAssets().list("runtime");
+            if (children == null || children.length == 0) throw new IOException("APK 中缺少游戏运行时");
+            for (String child : children) {
+                if (child.startsWith("java")) continue;
+                copyAssets(context, "runtime/" + child, new File(root, child));
+            }
             Files.write(marker.toPath(), new byte[]{1});
         }
+        File javaMarker = new File(root, java + "/.ready");
+        if (!javaMarker.isFile()) {
+            deleteTree(new File(root, java));
+            copyAssets(context, "runtime/" + java, new File(root, java));
+            if (!new File(root, java + "/lib/server/libjvm.so").isFile()) throw new IOException(java + " 运行时不完整");
+            Files.write(javaMarker.toPath(), new byte[]{1});
+        }
         return root;
+    }
+
+    private static void deleteTree(File file) {
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteTree(child);
+        file.delete();
+    }
+
+    /**
+     * Android 没有 /etc/resolv.conf，游戏内的 Java DNS 查询会失败（服务器、皮肤等）。
+     * 与 FCL 相同：写一份 resolv.conf，通过 -Dext.net.resolvPath 交给 JRE；先用系统当前的 DNS，再补充公共 DNS。
+     */
+    private static File writeResolvConf(Context context, File root) {
+        LinkedHashSet<String> servers = new LinkedHashSet<>();
+        try {
+            ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network network = manager.getActiveNetwork();
+            LinkProperties link = network == null ? null : manager.getLinkProperties(network);
+            if (link != null) for (java.net.InetAddress address : link.getDnsServers()) {
+                // JRE 的 DNS 解析无法处理裸 IPv6 地址，只保留 IPv4
+                if (address instanceof java.net.Inet4Address) servers.add(address.getHostAddress());
+            }
+        } catch (Exception ignored) {
+        }
+        Collections.addAll(servers, "223.5.5.5", "119.29.29.29", "8.8.8.8", "1.1.1.1");
+        StringBuilder text = new StringBuilder();
+        for (String server : servers) text.append("nameserver ").append(server).append('\n');
+        File file = new File(root, "resolv.conf");
+        try {
+            Files.write(file.toPath(), text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException ignored) {
+        }
+        return file;
     }
     /**
      * 与 FCL 的 RuntimeUtils.patchJava 相同：JRE 自带的 libawt_xawt.so 依赖桌面系统的 X11，在手机上无法加载，
@@ -54,53 +110,86 @@ final class GameRuntime {
         }
     }
 
+    /** 与 FCL 相同：关闭旧版 Forge 的启动动画（它会自己创建窗口，在手机上无法显示）。 */
+    private static void disableForgeSplash(String cwd) {
+        File config = new File(cwd, "config");
+        try {
+            if (!config.isDirectory() && !config.mkdirs()) return;
+            Files.write(new File(config, "splash.properties").toPath(), "enabled=false".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException ignored) {
+        }
+    }
+
     /**
      * 在 FCLBridge 的游戏线程中运行：日志重定向与画面绑定已由 FCLBridge.execute 完成，
      * 这里设置环境、加载运行库并启动 JVM。width/height 为游戏窗口尺寸。
      */
     static int launch(GameActivity activity, FCLBridge bridge, JSONObject request, File root, int width, int height) throws Exception {
-        String java = new File(root, "java17").getAbsolutePath();
+        String java = new File(root, request.optString("java", "java17")).getAbsolutePath();
         String nativeDir = activity.getApplicationInfo().nativeLibraryDir;
+        String cwd = request.getString("cwd");
         File log = new File(bridge.getLogPath());
         patchJava(new File(java), nativeDir);
         String natives = new File(root, "natives").getAbsolutePath();
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
+        // 渲染器：GL4ES 支持到 1.21.4；更新的版本使用 NG-GL4ES（环境变量与 FCL 相同）
+        boolean ng = "ng_gl4es".equals(request.optString("renderer", "gl4es"));
+        String glLibrary = nativeDir + (ng ? "/libng_gl4es.so" : "/libgl4es_114.so");
         String[][] env = {
-            {"JAVA_HOME", java}, {"HOME", request.getString("cwd")}, {"TMPDIR", activity.getCacheDir().getAbsolutePath()},
+            {"JAVA_HOME", java}, {"HOME", cwd}, {"TMPDIR", activity.getCacheDir().getAbsolutePath()},
             {"LD_LIBRARY_PATH", environmentPath}, {"PATH", java + "/bin:/system/bin"},
-            {"FCL_NATIVEDIR", nativeDir}, {"POJAV_NATIVEDIR", nativeDir},
-            {"POJAV_RENDERER", "opengles2"}, {"POJAVEXEC_EGL", "libEGL.so"},
-            {"LIBGL_ES", "2"}, {"LIBGL_MIPMAP", "3"}, {"LIBGL_NORMALIZE", "1"}, {"LIBGL_NOERROR", "1"},
+            {"FCL_NATIVEDIR", nativeDir}, {"POJAV_NATIVEDIR", nativeDir}, {"POJAVEXEC_EGL", "libEGL.so"},
+            {"LIBGL_NORMALIZE", "1"}, {"LIBGL_NOINTOVLHACK", "1"}, {"LIBGL_NOERROR", "1"},
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
+        if (ng) {
+            bridge.setenv("POJAV_RENDERER", "opengles3");
+            bridge.setenv("LIBGL_ES", "3");
+            bridge.setenv("LIBGL_GL", "31");
+            bridge.setenv("LIBGL_USE_MC_COLOR", "1");
+            bridge.setenv("DLOPEN", "libspirv-cross-c-shared.so");
+        } else {
+            bridge.setenv("POJAV_RENDERER", "opengles2");
+            bridge.setenv("LIBGL_ES", "2");
+            bridge.setenv("LIBGL_MIPMAP", "3");
+        }
         org.lwjgl.glfw.CallbackBridge.nativeSetUseInputStackQueue(true);
         bridge.setenv("DALVIK_JAVAVM", Long.toString(FCLBridge.getJavaVMPointer()));
         bridge.setenv("DALVIK_APPLICATION", FCLBridge.jObjectToString(activity.getApplicationContext()));
         bridge.setLdLibraryPath(libraryPath);
-        if (bridge.chdir(request.getString("cwd")) != 0) throw new IOException("无法进入游戏目录");
+        if (bridge.chdir(cwd) != 0) throw new IOException("无法进入游戏目录");
         for (String lib : new String[]{"libjli.so", "server/libjvm.so", "libfreetype.so", "libverify.so", "libjava.so", "libnet.so", "libnio.so", "libawt.so", "libawt_headless.so", "libfontmanager.so"})
             bridge.dlopen(java + "/lib/" + lib);
-        if (bridge.dlopen(nativeDir + "/libgl4es_114.so") == 0) throw new IOException("无法加载 GL4ES 渲染器");
+        if (ng && bridge.dlopen(nativeDir + "/libspirv-cross-c-shared.so") == 0) throw new IOException("无法加载 NG-GL4ES 的着色器转换库");
+        if (bridge.dlopen(glLibrary) == 0) throw new IOException("无法加载 " + (ng ? "NG-GL4ES" : "GL4ES") + " 渲染器");
         if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
-        activity.appendLog("[RCL] 画面尺寸 " + width + "x" + height + "，准备生成 JVM 参数\n");
+        disableForgeSplash(cwd);
+        File resolv = writeResolvConf(activity, root);
+        activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · " + (ng ? "NG-GL4ES" : "GL4ES") + "，画面尺寸 " + width + "x" + height + "\n");
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
-        args.add("-Duser.home=" + request.getString("cwd"));
+        args.add("-Duser.home=" + cwd);
         args.add("-Djava.io.tmpdir=" + activity.getCacheDir().getAbsolutePath());
         args.add("-XX:ErrorFile=" + new File(log.getParentFile(), "hs_err_pid%p.log").getAbsolutePath());
-        args.add("-Dorg.lwjgl.opengl.libname=" + nativeDir + "/libgl4es_114.so");
+        args.add("-XX:ActiveProcessorCount=" + Runtime.getRuntime().availableProcessors());
+        args.add("-Dext.net.resolvPath=" + resolv.getAbsolutePath());
+        args.add("-Dos.name=Linux");
+        args.add("-Dorg.lwjgl.opengl.libname=" + glLibrary);
         args.add("-Dorg.lwjgl.egl.libname=libEGL.so");
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");
         args.add("-Dorg.lwjgl.librarypath=" + natives);
+        if (new File(natives, "libfreetype.so").isFile()) args.add("-Dorg.lwjgl.freetype.libname=" + natives + "/libfreetype.so");
         args.add("-Djna.boot.library.path=" + natives);
         args.add("-Djna.nosys=true");
         args.add("-Djna.nounpack=true");
         args.add("-Dorg.lwjgl.system.allocator=system");
         args.add("-Dglfwstub.initEgl=false");
         args.add("-Dloader.disable_forked_guis=true");
+        args.add("-Dfml.earlyprogresswindow=false");
+        args.add("-Dsodium.checks.issue2561=false");
         args.add("-Djdk.lang.Process.launchMechanism=FORK");
         args.add("-Djava.awt.headless=false");
         args.add("-Dcacio.managed.screensize=" + width + "x" + height);
@@ -108,6 +197,7 @@ final class GameRuntime {
         args.add("-Djava.awt.graphicsenv=com.github.caciocavallosilano.cacio.ctc.CTCGraphicsEnvironment");
         args.add("-Dcacio.font.fontmanager=sun.awt.X11FontManager");
         args.add("-Dcacio.font.fontscaler=sun.font.FreetypeFontScaler");
+        args.add("-Dswing.defaultlaf=javax.swing.plaf.nimbus.NimbusLookAndFeel");
         args.add("-javaagent:" + root + "/cacio/cacio-agent.jar");
         for (String pkg : new String[]{"java.awt", "java.awt.peer", "java.awt.dnd.peer", "sun.awt", "sun.awt.image", "sun.awt.event", "sun.awt.datatransfer", "sun.java2d", "sun.font"})
             args.add("--add-exports=java.desktop/" + pkg + "=ALL-UNNAMED");
@@ -118,6 +208,8 @@ final class GameRuntime {
         ArrayList<String> boot = new ArrayList<>();
         if (cacio != null) for (File file : cacio) boot.add(file.getAbsolutePath());
         args.add("-Xbootclasspath/a:" + String.join(":", boot));
+        String mainClass = request.getString("mainClass");
+        boolean wrapped = false;
         JSONArray original = request.getJSONArray("args");
         for (int i = 0; i < original.length(); i++) {
             String arg = original.getString(i);
@@ -133,9 +225,19 @@ final class GameRuntime {
                 continue;
             }
             if (arg.startsWith("-Djava.library.path=")) { args.add("-Djava.library.path=" + libraryPath); continue; }
-            if (arg.equals(request.getString("mainClass"))) args.add("mio.Wrapper");
+            if (!wrapped && arg.equals(mainClass)) {
+                // 与 FCL 相同：由 mio.Wrapper 启动主类；主类在模块中时（Forge/NeoForge 的 BootstrapLauncher）需要导出给它
+                String pkg = mainClass.substring(0, Math.max(0, mainClass.lastIndexOf('.')));
+                if (!pkg.isEmpty()) {
+                    args.add("--add-exports");
+                    args.add(pkg + "/" + pkg + "=ALL-UNNAMED");
+                }
+                args.add("mio.Wrapper");
+                wrapped = true;
+            }
             args.add(arg);
         }
+        if (!wrapped) throw new IOException("启动参数中缺少主类 " + mainClass);
         activity.appendLog("[RCL] JVM 参数生成完成，准备设置退出回调\n");
         bridge.setupExitTrap(bridge);
         activity.appendLog("[RCL] 退出回调设置完成，准备初始化本地 hooks\n");

@@ -74,7 +74,7 @@ public final class GameActivity extends JVMActivity {
             }
         }, "RCL-Exit"));
         try {
-            File root = GameRuntime.install(this);
+            File root = GameRuntime.install(this, request.optString("java", "java17"));
             writeStatus("running", null);
             int code = GameRuntime.launch(this, bridge, request, root, CallbackBridge.windowWidth, CallbackBridge.windowHeight);
             onGameExit(code);

@@ -11,7 +11,7 @@ def verify(path: Path) -> None:
         names = set(apk.namelist())
         required = {
             f"lib/arm64-v8a/lib{name}.so"
-            for name in ("pojavexec", "pojavexec_awt", "fcl", "androidnsbypass", "bytehook", "c++_shared", "awt_xawt")
+            for name in ("pojavexec", "pojavexec_awt", "fcl", "androidnsbypass", "bytehook", "c++_shared", "awt_xawt", "ng_gl4es", "spirv-cross-c-shared")
         }
         missing = required - names
         if missing:
@@ -24,7 +24,7 @@ def verify(path: Path) -> None:
                 raise ValueError(f"不应打包的架构：{name}")
         if "assets/notices/FCL-LICENSE.txt" not in names:
             raise ValueError("缺少 FCL 许可文件")
-        for required_asset in ("java17/lib/server/libjvm.so", "java17/lib/libjli.so", "lwjgl/lwjgl-3.3.3-merged-modules.jar", "cacio/cacio-agent.jar", "MioLaunchWrapper.jar"):
+        for required_asset in ("java17/lib/server/libjvm.so", "java17/lib/libjli.so", "java21/lib/server/libjvm.so", "java21/lib/libjli.so", "lwjgl/lwjgl-3.3.3-merged-modules.jar", "cacio/cacio-agent.jar", "MioLaunchWrapper.jar"):
             if "assets/runtime/" + required_asset not in names:
                 raise ValueError(f"缺少游戏运行时：{required_asset}")
         if "lib/arm64-v8a/libgl4es_114.so" not in names:
