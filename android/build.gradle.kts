@@ -13,6 +13,10 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // FCL 按键系统使用的手柄映射库只发布在 JitPack
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.Mathias-Boulay") }
+        }
     }
 }
 

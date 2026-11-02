@@ -88,12 +88,23 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        // FCL 的按键系统使用 Java 17 语法；标准库新接口通过脱糖在 Android 8 上可用
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         buildConfig = true
         prefab = true
+        viewBinding = true
+    }
+    // 游戏内按键系统移植自 FCL（GPL-3.0），源码与资源单独放在 src/fcl
+    sourceSets {
+        getByName("main") {
+            java.srcDir("src/fcl/java")
+            res.srcDir("src/fcl/res")
+            assets.srcDir("src/fcl/assets")
+        }
     }
     externalNativeBuild {
         cmake {
@@ -109,7 +120,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_1_8
+        jvmTarget = JvmTarget.JVM_17
     }
 }
 
@@ -124,6 +135,16 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    // FCL 按键系统
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    implementation("com.github.Mathias-Boulay:android_gamepad_remapper:2.0.3")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")

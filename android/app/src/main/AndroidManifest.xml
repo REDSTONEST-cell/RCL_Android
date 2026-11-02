@@ -34,8 +34,8 @@
             android:process=":jvm"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout|uiMode"
-            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+            android:configChanges="orientation|keyboardHidden|keyboard|navigation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:theme="@style/Theme.FoldCraftLauncher" />
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

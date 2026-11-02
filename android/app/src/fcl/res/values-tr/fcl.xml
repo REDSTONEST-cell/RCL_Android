@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources><string name="button_cancel">İptal</string>
+    <string name="control_incompatible">Kontrolcü: %s uyumsuz bir kontrolcüdür. Başlatıcı sürümünün veya kontrolcü sürümünün çok eski olmasından kaynaklanıyor olabilir. Lütfen kontrol edin.</string>
+    <string name="control_info_more">Daha fazla Bilgi</string>
+    <string name="control_upgrade">Kontrolcü: %s eski bir kontrolcüdür; bazı bilinmeyen hatalara neden olabilir, ancak hâlâ destekliyoruz. Yeni bir sürüme geçirmek istiyor musunuz?</string>
+    <string name="edit_button_event_swipable">Kaydırma Zinciri</string>
+    <string name="edit_direction_event_can_lock">İleri Kilidi</string>
+    <string name="edit_direction_event_dead_zone">Ölü Bölge</string>
+    <string name="edit_direction_event_lock_threshold">Kilit Eşiği</string>
+    <string name="menu_controls_edit_hint">Seçmek için dokunun, taşımak için sürükleyin, boyutlandırmak için köşe tutamaklarını sürükleyin</string>
+    <string name="menu_settings_controls_opacity">Kontrol Opaklığı</string>
+</resources>

@@ -31,3 +31,12 @@
 
   @android.webkit.JavascriptInterface public <methods>;
 }
+
+# 游戏内按键系统（移植自 FCL）：按键布局与菜单设置通过 Gson 反射读写，
+# native 层也按名称回调这些类的方法，FCL 本身也不做混淆，因此整体保留。
+-keepattributes Signature,InnerClasses,EnclosingMethod,*Annotation*
+-keep class com.tungsten.** { *; }
+-keep class com.mio.** { *; }
+-keep class org.lwjgl.glfw.** { *; }
+-keep class org.libsdl.** { *; }
+-keep class fr.spse.gamepad_remapper.** { *; }

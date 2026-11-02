@@ -54,14 +54,18 @@ final class GameRuntime {
         }
     }
 
-    static int launch(GameActivity activity, JSONObject request, File root, File log) throws Exception {
+    /**
+     * 在 FCLBridge 的游戏线程中运行：日志重定向与画面绑定已由 FCLBridge.execute 完成，
+     * 这里设置环境、加载运行库并启动 JVM。width/height 为游戏窗口尺寸。
+     */
+    static int launch(GameActivity activity, FCLBridge bridge, JSONObject request, File root, int width, int height) throws Exception {
         String java = new File(root, "java17").getAbsolutePath();
         String nativeDir = activity.getApplicationInfo().nativeLibraryDir;
+        File log = new File(bridge.getLogPath());
         patchJava(new File(java), nativeDir);
         String natives = new File(root, "natives").getAbsolutePath();
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
-        FCLBridge bridge = new FCLBridge();
         String[][] env = {
             {"JAVA_HOME", java}, {"HOME", request.getString("cwd")}, {"TMPDIR", activity.getCacheDir().getAbsolutePath()},
             {"LD_LIBRARY_PATH", environmentPath}, {"PATH", java + "/bin:/system/bin"},
@@ -71,25 +75,16 @@ final class GameRuntime {
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
-        Class.forName("org.lwjgl.glfw.CallbackBridge");
-        activity.nativeReady = true;
         org.lwjgl.glfw.CallbackBridge.nativeSetUseInputStackQueue(true);
         bridge.setenv("DALVIK_JAVAVM", Long.toString(FCLBridge.getJavaVMPointer()));
         bridge.setenv("DALVIK_APPLICATION", FCLBridge.jObjectToString(activity.getApplicationContext()));
         bridge.setLdLibraryPath(libraryPath);
-        if (bridge.redirectStdio(log.getAbsolutePath()) != 0) throw new IOException("无法创建游戏日志");
         if (bridge.chdir(request.getString("cwd")) != 0) throw new IOException("无法进入游戏目录");
         for (String lib : new String[]{"libjli.so", "server/libjvm.so", "libfreetype.so", "libverify.so", "libjava.so", "libnet.so", "libnio.so", "libawt.so", "libawt_headless.so", "libfontmanager.so"})
             bridge.dlopen(java + "/lib/" + lib);
         if (bridge.dlopen(nativeDir + "/libgl4es_114.so") == 0) throw new IOException("无法加载 GL4ES 渲染器");
         if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
-        activity.appendLog("[RCL] 准备绑定游戏 Surface\n");
-        if (activity.surface == null || !activity.surface.isValid()) throw new IOException("游戏画面 Surface 已失效");
-        org.lwjgl.glfw.CallbackBridge.setupBridgeWindow(activity.surface);
-        activity.appendLog("[RCL] Surface 绑定完成，准备设置画面尺寸\n");
-        org.lwjgl.glfw.CallbackBridge.nativeSendScreenSize(activity.width, activity.height);
-        activity.appendLog("[RCL] 画面尺寸设置完成，准备生成 JVM 参数\n");
-        activity.inputReady = true;
+        activity.appendLog("[RCL] 画面尺寸 " + width + "x" + height + "，准备生成 JVM 参数\n");
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
@@ -108,7 +103,7 @@ final class GameRuntime {
         args.add("-Dloader.disable_forked_guis=true");
         args.add("-Djdk.lang.Process.launchMechanism=FORK");
         args.add("-Djava.awt.headless=false");
-        args.add("-Dcacio.managed.screensize=" + activity.width + "x" + activity.height);
+        args.add("-Dcacio.managed.screensize=" + width + "x" + height);
         args.add("-Dawt.toolkit=com.github.caciocavallosilano.cacio.ctc.CTCToolkit");
         args.add("-Djava.awt.graphicsenv=com.github.caciocavallosilano.cacio.ctc.CTCGraphicsEnvironment");
         args.add("-Dcacio.font.fontmanager=sun.awt.X11FontManager");

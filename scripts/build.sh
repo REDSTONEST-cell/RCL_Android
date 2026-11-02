@@ -26,6 +26,11 @@ fi
 
 # 保留上一次构建的 Gradle 缓存与产物，只覆盖源码
 mkdir -p "$gen"
+# 先删除上一次复制的源码与资源，避免 android/ 中已删除的文件残留（保留 Tauri 生成的代码）
+if [ -d "$gen/app/src/main/java" ]; then
+    find "$gen/app/src/main/java" -type f -not -path "*/generated/*" -delete
+fi
+rm -rf "$gen/app/src/fcl" "$gen/app/src/main/res"
 (cd "$root/android" && tar -cf - .) | (cd "$gen" && tar -xf -)
 mkdir -p "$gen/app/src/main/jni"
 (cd "$fcl/FCL/src/main/jni" && tar -cf - .) | (cd "$gen/app/src/main/jni" && tar -xf -)

@@ -1,168 +1,144 @@
 package com.redstonest.redcraft;
 
-import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
-import android.view.*;
-import android.widget.*;
+import com.tungsten.fcl.FCLApp;
+import com.tungsten.fcl.activity.JVMActivity;
+import com.tungsten.fcl.control.MenuType;
+import com.tungsten.fclauncher.bridge.FCLBridge;
+import com.tungsten.fclauncher.utils.FCLPath;
 import org.json.JSONObject;
 import org.lwjgl.glfw.CallbackBridge;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-public final class GameActivity extends Activity implements SurfaceHolder.Callback {
+/**
+ * 游戏画面。界面、按键与游戏内菜单使用 FCL 的 JVMActivity / GameMenu；
+ * 这里负责读取启动器交给的启动请求、在 FCLBridge 的线程中启动 JVM，并把运行状态写回启动器。
+ */
+public final class GameActivity extends JVMActivity {
     public static volatile GameActivity current;
-    public Surface surface;
-    public int width = 1280, height = 720;
-    public volatile boolean inputReady;
-    public volatile boolean nativeReady;
-    private boolean launched;
     private File sessionDir;
     private JSONObject request;
-    private float lastX, lastY, cursorX, cursorY;
-    private boolean moved;
-    @Override public void onCreate(Bundle saved) {
-        super.onCreate(saved);
+    private FCLBridge bridge;
+    private boolean exited;
+
+    @Override
+    protected void onCreate(Bundle saved) {
         current = this;
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        // 画面延伸到刘海/挖孔区域，否则横屏时刘海一侧会留一条黑边。
-        if (android.os.Build.VERSION.SDK_INT >= 28)
-            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        getWindow().getDecorView().setSystemUiVisibility(5894);
+        FCLApp.attach(this);
+        FCLPath.loadPaths(this);
+        JVMActivity.setFCLBridge(null, MenuType.GAME);
+        Throwable failure = null;
         String session = getIntent().getStringExtra("session");
-        if (session == null || !session.matches("[0-9a-f-]{36}")) { finish(); return; }
-        sessionDir = new File(getFilesDir(), "game-session/" + session);
+        if (session != null && session.matches("[0-9a-f-]{36}")) {
+            sessionDir = new File(getFilesDir(), "game-session/" + session);
+            try {
+                File file = new File(sessionDir, "request.json");
+                request = new JSONObject(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
+                if (!file.delete()) throw new IOException("无法清除临时启动凭据");
+                writeStatus("starting", null);
+                bridge = new FCLBridge();
+                bridge.setLogPath(new File(sessionDir, "game.log").getAbsolutePath());
+                bridge.setGameDir(request.getString("cwd"));
+                bridge.setJava("17");
+                bridge.setRenderer("GL4ES");
+                bridge.setThread(new Thread(this::runGame, "RCL-JVM"));
+                JVMActivity.setFCLBridge(bridge, MenuType.GAME);
+            } catch (Exception error) {
+                failure = error;
+            }
+        }
+        super.onCreate(saved);
+        if (sessionDir == null) {
+            finish();
+        } else if (failure != null) {
+            showError(failure);
+        }
+    }
+
+    /** 由 FCLBridge.execute 在画面就绪后启动。 */
+    private void runGame() {
         try {
-            File file = new File(sessionDir, "request.json");
-            request = new JSONObject(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
-            if (!file.delete()) throw new IOException("无法清除临时启动凭据");
-            writeStatus("starting", null);
-        } catch (Exception error) { showError(error); return; }
-        FrameLayout frame = new FrameLayout(this);
-        SurfaceView view = new SurfaceView(this);
-        view.getHolder().addCallback(this);
-        view.setOnTouchListener((v, event) -> {
-            if (!inputReady) return true;
-            float x = event.getX(), y = event.getY();
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { lastX = x; lastY = y; moved = false; }
-            if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
-                float dx = x - lastX, dy = y - lastY;
-                moved |= Math.abs(dx) + Math.abs(dy) > 3;
-                cursorX += dx; cursorY += dy;
-                CallbackBridge.nativeSendCursorPos(CallbackBridge.grabbing ? cursorX : x, CallbackBridge.grabbing ? cursorY : y);
-                lastX = x; lastY = y;
-            }
-            if (event.getActionMasked() == MotionEvent.ACTION_UP && !moved) {
-                if (!CallbackBridge.grabbing) CallbackBridge.nativeSendCursorPos(x, y);
-                CallbackBridge.nativeSendMouseButton(0, 1, 0);
-                CallbackBridge.nativeSendMouseButton(0, 0, 0);
-            }
-            return true;
-        });
-        frame.addView(view);
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.addView(keyRow(new String[]{"W", "A", "S", "D"}, new int[]{87,65,83,68}));
-        controls.addView(keyRow(new String[]{"跳跃", "背包", "暂停"}, new int[]{32,69,256}));
-        LinearLayout actions = new LinearLayout(this);
-        for (int i = 0; i < 2; i++) {
-            final int button = i;
-            Button b = new Button(this); b.setText(i == 0 ? "攻击" : "使用");
-            b.setOnTouchListener((v,e) -> {
-                if (inputReady && (e.getActionMasked() == 0 || e.getActionMasked() == 1 || e.getActionMasked() == 3))
-                    CallbackBridge.nativeSendMouseButton(button, e.getActionMasked() == 0 ? 1 : 0, 0);
-                return true;
-            });
-            actions.addView(b);
+            File root = GameRuntime.install(this);
+            writeStatus("running", null);
+            int code = GameRuntime.launch(this, bridge, request, root, CallbackBridge.windowWidth, CallbackBridge.windowHeight);
+            onGameExit(code);
+        } catch (Throwable error) {
+            showError(error);
         }
-        controls.addView(actions);
-        FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(-2,-2, Gravity.BOTTOM | Gravity.LEFT);
-        frame.addView(controls, position);
-        // 按键避开刘海，画面本身仍然铺满全屏。
-        if (android.os.Build.VERSION.SDK_INT >= 28) controls.setOnApplyWindowInsetsListener((v, insets) -> {
-            DisplayCutout cutout = insets.getDisplayCutout();
-            v.setPadding(cutout == null ? 0 : cutout.getSafeInsetLeft(), 0, 0, cutout == null ? 0 : cutout.getSafeInsetBottom());
-            return insets;
-        });
-        setContentView(frame);
     }
-    @Override public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        // 下拉通知栏等操作后系统栏会重新出现，回到游戏时重新隐藏。
-        if (hasFocus) getWindow().getDecorView().setSystemUiVisibility(5894);
-    }
-    private LinearLayout keyRow(String[] names, int[] keys) {
-        LinearLayout row = new LinearLayout(this);
-        for (int i=0;i<names.length;i++) {
-            final int key = keys[i]; Button b = new Button(this); b.setText(names[i]); b.setAlpha(.65f);
-            b.setOnTouchListener((v,e) -> {
-                int action = e.getActionMasked();
-                if (inputReady && (action == 0 || action == 1 || action == 3))
-                    CallbackBridge.nativeSendKey(key,0,action == 0 ? 1 : 0,0);
-                return true;
-            }); row.addView(b);
+
+    /** 写入游戏日志；游戏菜单就绪后经 FCLBridge 转发，同时显示在游戏内的日志窗口。 */
+    public void appendLog(String message) {
+        if (bridge != null && bridge.getCallback() != null) {
+            bridge.receiveLog(message);
+            return;
         }
-        return row;
-    }
-    private synchronized void writeStatus(String state, Integer code) throws Exception {
-        JSONObject value = new JSONObject().put("state", state).put("pid", android.os.Process.myPid());
-        if (code != null) value.put("code", code);
-        File tmp = new File(sessionDir,"status.tmp");
-        Files.write(tmp.toPath(),value.toString().getBytes(StandardCharsets.UTF_8));
-        if (!tmp.renameTo(new File(sessionDir,"status.json"))) throw new IOException("无法保存游戏状态");
-    }
-    public synchronized void appendLog(String message) {
         if (sessionDir == null) return;
-        try (FileOutputStream stream = new FileOutputStream(new File(sessionDir,"game.log"),true)) {
-            stream.write(message.getBytes(StandardCharsets.UTF_8));
-        } catch(IOException ignored) {}
+        synchronized (this) {
+            try (FileOutputStream stream = new FileOutputStream(new File(sessionDir, "game.log"), true)) {
+                stream.write(message.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ignored) {
+            }
+        }
     }
-    public synchronized void exitGame(int code) {
-        inputReady = false;
+
+    @Override
+    public void onGameExit(int code) {
+        synchronized (this) {
+            if (exited) return;
+            exited = true;
+        }
         if (sessionDir != null) {
-            File[] reports = sessionDir.listFiles((dir,name) -> name.startsWith("hs_err_pid") && name.endsWith(".log"));
+            File[] reports = sessionDir.listFiles((dir, name) -> name.startsWith("hs_err_pid") && name.endsWith(".log"));
             if (reports != null) for (File report : reports) {
                 try (InputStream in = new FileInputStream(report)) {
                     byte[] bytes = new byte[128 * 1024];
                     int length = in.read(bytes);
-                    if (length > 0) appendLog("\n[RCL] JVM 崩溃报告：" + report.getName() + "\n" + new String(bytes,0,length,StandardCharsets.UTF_8));
-                } catch(IOException ignored) {}
+                    if (length > 0) appendLog("\n[RCL] JVM 崩溃报告：" + report.getName() + "\n" + new String(bytes, 0, length, StandardCharsets.UTF_8));
+                } catch (IOException ignored) {
+                }
             }
         }
-        try { writeStatus("exited",code); } catch(Exception ignored) {}
-        runOnUiThread(() -> { finish(); android.os.Process.killProcess(android.os.Process.myPid()); });
-    }
-    private void showError(Throwable error) {
-        if (sessionDir != null) try {
-            StringWriter trace = new StringWriter();
-            error.printStackTrace(new PrintWriter(trace));
-            appendLog("\n" + trace + "\n");
-            writeStatus("exited",-1);
-        } catch(Exception ignored) {}
+        try {
+            writeStatus("exited", code);
+        } catch (Exception ignored) {
+        }
         runOnUiThread(() -> {
-            TextView text = new TextView(this); text.setText("游戏启动失败\n" + error + "\n日志可在启动器中查看");
-            setContentView(text);
+            finish();
+            android.os.Process.killProcess(android.os.Process.myPid());
         });
     }
-    @Override public void surfaceCreated(SurfaceHolder holder) {
-        surface = holder.getSurface();
-        if (launched) { if (nativeReady) { CallbackBridge.setupBridgeWindow(surface); inputReady=true; } return; }
-        launched = true;
-        new Thread(() -> {
-            try {
-                File root = GameRuntime.install(this);
-                writeStatus("running",null);
-                exitGame(GameRuntime.launch(this,request,root,new File(sessionDir,"game.log")));
-            } catch(Throwable error) { showError(error); }
-        },"RCL-JVM").start();
+
+    private synchronized void writeStatus(String state, Integer code) throws Exception {
+        JSONObject value = new JSONObject().put("state", state).put("pid", android.os.Process.myPid());
+        if (code != null) value.put("code", code);
+        File tmp = new File(sessionDir, "status.tmp");
+        Files.write(tmp.toPath(), value.toString().getBytes(StandardCharsets.UTF_8));
+        if (!tmp.renameTo(new File(sessionDir, "status.json"))) throw new IOException("无法保存游戏状态");
     }
-    @Override public void surfaceChanged(SurfaceHolder holder,int format,int w,int h) {
-        width=w; height=h;
-        if (inputReady) CallbackBridge.nativeSendScreenSize(w,h);
-    }
-    @Override public void surfaceDestroyed(SurfaceHolder holder) { inputReady=false; }
-    @Override public void onBackPressed() {
-        if(inputReady) { CallbackBridge.nativeSendKey(256,0,1,0); CallbackBridge.nativeSendKey(256,0,0,0); }
-        else { finish(); android.os.Process.killProcess(android.os.Process.myPid()); }
+
+    private void showError(Throwable error) {
+        StringWriter trace = new StringWriter();
+        error.printStackTrace(new PrintWriter(trace));
+        appendLog("\n" + trace + "\n");
+        synchronized (this) {
+            exited = true;
+        }
+        try {
+            writeStatus("exited", -1);
+        } catch (Exception ignored) {
+        }
+        runOnUiThread(() -> new AlertDialog.Builder(this)
+                .setTitle("游戏启动失败")
+                .setMessage(error + "\n\n日志可在启动器中查看")
+                .setCancelable(false)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    finish();
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                })
+                .show());
     }
 }
