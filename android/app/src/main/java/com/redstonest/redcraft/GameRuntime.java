@@ -19,6 +19,8 @@ final class GameRuntime {
             if (!target.isDirectory() && !target.mkdirs()) throw new IOException("无法创建运行时目录");
             for (String child : children) copyAssets(context, source + "/" + child, new File(target, child));
         } else {
+            File parent = target.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("无法创建运行时目录");
             try (InputStream in = context.getAssets().open(source); OutputStream out = new FileOutputStream(target)) {
                 byte[] buffer = new byte[65536];
                 int count;
@@ -43,6 +45,7 @@ final class GameRuntime {
         if (!marker.isFile()) {
             String[] children = context.getAssets().list("runtime");
             if (children == null || children.length == 0) throw new IOException("APK 中缺少游戏运行时");
+            if (!root.isDirectory() && !root.mkdirs()) throw new IOException("无法创建运行时目录");
             for (String child : children) {
                 if (child.startsWith("java")) continue;
                 copyAssets(context, "runtime/" + child, new File(root, child));
