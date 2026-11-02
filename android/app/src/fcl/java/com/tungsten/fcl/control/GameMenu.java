@@ -1026,10 +1026,11 @@ public class GameMenu implements MenuCallback, FCLBridgeCallback {
     @Override
     public void onLog(String log) {
         if (fclBridge != null) {
-            if (log.contains("version string:") || log.contains("OR:") || log.contains("ERROR:") || log.contains("INTERNAL ERROR:")) {
-                return;
+            // RCL：native 层一次转来一段日志（可能包含多行），整段丢弃会连带丢掉正常日志；
+            // 完整日志写入文件，只在游戏内日志窗口中过滤这些噪声
+            if (!(log.contains("version string:") || log.contains("OR:") || log.contains("ERROR:") || log.contains("INTERNAL ERROR:"))) {
+                logWindow.appendLog(log);
             }
-            logWindow.appendLog(log);
             try {
                 // RCL：启动器在游戏开始前已经写入了日志，这里只追加，不覆盖
                 FileUtils.writeTextWithAppendMode(new File(fclBridge.getLogPath()), log);
@@ -1197,7 +1198,8 @@ public class GameMenu implements MenuCallback, FCLBridgeCallback {
                 FCLAlertDialog.Builder builder = new FCLAlertDialog.Builder(activity);
                 builder.setAlertLevel(FCLAlertDialog.AlertLevel.ALERT);
                 builder.setMessage(activity.getString(R.string.menu_settings_force_exit_msg));
-                builder.setPositiveButton(() -> android.os.Process.killProcess(android.os.Process.myPid()));
+                // RCL：玩家主动结束游戏，按正常退出告知启动器
+                builder.setPositiveButton(() -> ((JVMActivity) activity).onGameExit(0));
                 builder.setNegativeButton(null);
                 builder.setCancelable(false);
                 builder.create().show();

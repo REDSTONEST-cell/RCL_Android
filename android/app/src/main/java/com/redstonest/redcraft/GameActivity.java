@@ -60,6 +60,19 @@ public final class GameActivity extends JVMActivity {
 
     /** 由 FCLBridge.execute 在画面就绪后启动。 */
     private void runGame() {
+        // 游戏正常退出（退出码 0）时，native 退出拦截不会回调 onExit，而是直接调用 System.exit(0)；
+        // 在关闭钩子中补写退出码，否则启动器只能看到进程消失，会误判为崩溃
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            synchronized (this) {
+                if (exited) return;
+                exited = true;
+            }
+            appendLog("\n[RCL] 游戏已退出，退出码 0\n");
+            try {
+                writeStatus("exited", 0);
+            } catch (Exception ignored) {
+            }
+        }, "RCL-Exit"));
         try {
             File root = GameRuntime.install(this);
             writeStatus("running", null);
