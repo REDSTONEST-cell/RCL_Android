@@ -256,16 +256,18 @@ final class GameRuntime {
         if (bridge.dlopen(nativeDir + "/libopenal.so") == 0) throw new IOException("无法加载 OpenAL 音频库");
         disableForgeSplash(cwd);
         if (request.optBoolean("disableEarlyWindow", false)) disableEarlyWindow(cwd);
+        com.tungsten.fcl.setting.GameOption option = new com.tungsten.fcl.setting.GameOption(cwd);
         if (lwjgl341) {
             // 26.x 可以用 Vulkan 绘图。很多手机 GPU（如 Mali）只提供 KHR 版的 vertex_attribute_divisor，
             // 缺少游戏要求的 EXT 版；与 FCL 相同，经 vkshim 包装系统 Vulkan 补上（驱动原生支持时直通）。
-            // 26.3 的新着色器无法在 GLES（包括 ANGLE）上编译，交给游戏自动选择后端（可用时为 Vulkan）；
+            // 26.3 的新透明度着色器无法在 GLES（包括 ANGLE）上编译，固定使用 Vulkan（FCL 的「图形后端」选项）；
             // 26.1 ~ 26.2 使用 OpenGL（MobileGlues）
             bridge.setenv("VKSHIM_ENABLE", "1");
-            com.tungsten.fcl.setting.GameOption option = new com.tungsten.fcl.setting.GameOption(cwd);
-            option.set("preferredGraphicsBackend", request.optBoolean("angle", false) ? "default" : "opengl");
-            option.save();
+            option.set("preferredGraphicsBackend", request.optBoolean("angle", false) ? "vulkan" : "opengl");
         }
+        // 与 FCL 相同：游戏上次启动中途退出时会在下次启动强制改用 OpenGL，每次启动前清除这个标记
+        option.set("startedCleanly", "true");
+        option.save();
         File resolv = writeResolvConf(activity, root);
         activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · LWJGL " + (lwjgl341 ? "3.4.1" : "3.3.3") + " · " + rendererName + " · JNA " + new File(jna).getName() + "，画面尺寸 " + width + "x" + height + "\n");
         ArrayList<String> args = new ArrayList<>();
@@ -290,6 +292,8 @@ final class GameRuntime {
         args.add("-Dorg.lwjgl.system.allocator=system");
         args.add("-Dglfwstub.initEgl=false");
         args.add("-Dloader.disable_forked_guis=true");
+        // Fabric 加载失败（如 Mod 与游戏版本不符）时不打开错误窗口（手机上无法显示，游戏会一直卡在黑屏），直接退出并留下日志
+        args.add("-Dfabric.noGui=true");
         args.add("-Dfml.earlyprogresswindow=false");
         args.add("-Dsodium.checks.issue2561=false");
         args.add("-Djdk.lang.Process.launchMechanism=FORK");
