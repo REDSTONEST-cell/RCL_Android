@@ -39,6 +39,7 @@ public final class GameActivity extends JVMActivity {
                 request = new JSONObject(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
                 if (!file.delete()) throw new IOException("无法清除临时启动凭据");
                 writeStatus("starting", null);
+                Heartbeat.start(sessionDir);
                 bridge = new FCLBridge();
                 bridge.setLogPath(new File(sessionDir, "game.log").getAbsolutePath());
                 bridge.setGameDir(request.getString("cwd"));

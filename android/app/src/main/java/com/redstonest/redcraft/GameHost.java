@@ -239,6 +239,16 @@ public final class GameHost {
         activity.runOnUiThread(() -> activity.startActivity(
             new Intent(activity, GameActivity.class).putExtra("session", session)));
     }
+    /**
+     * 在 :jvm 进程中运行一次 Java 程序（安装器等，见 JavaService）。一个进程只能创建一次 JVM，
+     * 先结束残留的 :jvm 进程（例如上一次游戏或安装器），稍后再启动服务。
+     */
+    @JavascriptInterface public void runJava(String session) {
+        if (!session.matches("[0-9a-f-]{36}")) return;
+        stop();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
+            activity.startService(new Intent(activity, JavaService.class).putExtra("session", session)), 800);
+    }
     @JavascriptInterface public void stop() {
         ActivityManager manager = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
         if (manager.getRunningAppProcesses() == null) return;

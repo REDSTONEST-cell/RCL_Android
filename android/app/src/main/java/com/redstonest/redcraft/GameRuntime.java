@@ -72,7 +72,7 @@ final class GameRuntime {
      * Android 没有 /etc/resolv.conf，游戏内的 Java DNS 查询会失败（服务器、皮肤等）。
      * 与 FCL 相同：写一份 resolv.conf，通过 -Dext.net.resolvPath 交给 JRE；先用系统当前的 DNS，再补充公共 DNS。
      */
-    private static File writeResolvConf(Context context, File root) {
+    static File writeResolvConf(Context context, File root) {
         LinkedHashSet<String> servers = new LinkedHashSet<>();
         try {
             ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -99,7 +99,7 @@ final class GameRuntime {
      * cacio 初始化 AWT 时会因此让 JVM 直接退出；用 APK 中编译的替代实现覆盖它。libjsound.so 同样替换为
      * 使用 OpenAL 的实现。
      */
-    private static void patchJava(File java, String nativeDir) throws IOException {
+    static void patchJava(File java, String nativeDir) throws IOException {
         for (String name : new String[]{"libawt_xawt.so", "libjsound.so"}) {
             File source = new File(nativeDir, name);
             if (!source.isFile()) {
