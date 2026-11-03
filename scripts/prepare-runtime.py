@@ -100,6 +100,9 @@ target_jna = runtime / 'natives/libjnidispatch.so'
 target_jna.parent.mkdir(exist_ok=True)
 shutil.copy2(source / 'assets/app_runtime/jna/5.13.0/natives/arm64-v8a/libjnidispatch.so', target_jna)
 shutil.copy2(source / 'jniLibs/arm64-v8a/libgl4es_114.so', native)
+# ANGLE（GLES on Vulkan）：MobileGlues 在设备支持时改用它，26.3 的着色器需要（与 FCL 的默认设置相同）
+for name in ('libEGL_angle.so', 'libGLESv2_angle.so'):
+    shutil.copy2(source / 'jniLibs/arm64-v8a' / name, native)
 # 渲染器、LWJGL、OpenAL 与 SDL 的本地库：
 # NG-GL4ES 与 spirv-cross 用于 1.21.5 ~ 26.2；26.3 起游戏改用 SDL3 管理窗口，渲染器使用 MobileGlues
 natives_dir = {'lwjgl-3.4.1-natives-release.aar': 'natives-3.4.1'}

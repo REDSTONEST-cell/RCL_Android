@@ -5,7 +5,10 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
+import android.util.Log;
 import com.oracle.dalvik.VMLauncher;
+import com.tungsten.fcl.FCLApp;
+import com.tungsten.fclauncher.utils.FCLPath;
 import com.tungsten.fclauncher.bridge.FCLBridge;
 import com.tungsten.fclauncher.bridge.FCLBridgeCallback;
 import org.json.JSONArray;
@@ -41,6 +44,9 @@ public final class JavaService extends Service {
             return START_NOT_STICKY;
         }
         sessionDir = new File(getFilesDir(), "java-session/" + session);
+        // FCL 的部分类（如 SdlSettings）在初始化时读取应用 Context 与路径，游戏界面中由 GameActivity 设置
+        FCLApp.attach(this);
+        FCLPath.loadPaths(this);
         new Thread(this::run, "RCL-Java").start();
         return START_NOT_STICKY;
     }
@@ -58,7 +64,7 @@ public final class JavaService extends Service {
                 try {
                     finish(launch(bridge, request, root));
                 } catch (Throwable error) {
-                    log("\n" + error + "\n");
+                    log("\n" + Log.getStackTraceString(error) + "\n");
                     finish(-1);
                 }
             }, "RCL-JVM"));
@@ -78,7 +84,7 @@ public final class JavaService extends Service {
                 }
             });
         } catch (Throwable error) {
-            log("\n" + error + "\n");
+            log("\n" + Log.getStackTraceString(error) + "\n");
             finish(-1);
         }
     }

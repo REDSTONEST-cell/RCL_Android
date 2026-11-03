@@ -114,6 +114,24 @@ final class GameRuntime {
     }
 
     /**
+     * MobileGlues 的配置：与 FCL 的默认设置相同，设备支持时使用 ANGLE（GLES on Vulkan）作为后端。
+     * 直接使用驱动的 GLES 时，26.3 的部分着色器（按变量下标写输出数组）无法编译，游戏会在加载时崩溃。
+     * 只补充缺少的键，不覆盖已有的设置。
+     */
+    private static void writeMobileGluesConfig(File mgDir) {
+        File file = new File(mgDir, "config.json");
+        try {
+            JSONObject config = file.isFile()
+                ? new JSONObject(new String(Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8))
+                : new JSONObject();
+            if (config.has("enableANGLE")) return;
+            config.put("enableANGLE", 1);
+            Files.write(file.toPath(), config.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
      * 选择与游戏使用的 JNA 版本一致的本地库（版本不一致时 JNA 会报「incompatible JNA native library」）。
      * 没有完全相同的版本时，选择不低于它的最近版本，再不行用最新的。
      */
@@ -210,6 +228,7 @@ final class GameRuntime {
             File mgDir = new File(activity.getFilesDir(), "mobileglues");
             if (!mgDir.isDirectory() && !mgDir.mkdirs()) throw new IOException("无法创建 MobileGlues 配置目录");
             bridge.setenv("MG_DIR_PATH", mgDir.getAbsolutePath());
+            writeMobileGluesConfig(mgDir);
         } else if (ng) {
             bridge.setenv("POJAV_RENDERER", "opengles3");
             bridge.setenv("LIBGL_ES", "3");

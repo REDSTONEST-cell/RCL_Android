@@ -13,6 +13,11 @@ public final class FCLApp {
     private FCLApp() {
     }
 
+    /** RCL：没有界面的进程（如运行安装器的 JavaService）只设置应用 Context。 */
+    public static void attach(Context current) {
+        context = current.getApplicationContext();
+    }
+
     public static void attach(Activity current) {
         context = current.getApplicationContext();
         activity = new WeakReference<>(current);
