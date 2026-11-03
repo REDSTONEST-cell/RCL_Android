@@ -7,6 +7,7 @@
   lwjgl-3.4.1, natives-3.4.1 LWJGL 3.4.1（26.x），由 FCL 的源码编译合并，与 FCL 的 Gradle 任务相同
   jna/<版本>                 各版本 JNA 的本地库，按游戏使用的 JNA 版本选择
 """
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -127,6 +128,25 @@ for version in (17, 21, 25):
 for required in ('lwjgl-3.4.1/lwjgl-3.4.1-merged-modules.jar', 'lwjgl-3.4.1/lwjgl.jar', 'natives-3.4.1/liblwjgl.so', 'jna/5.17.0/libjnidispatch.so'):
     if not (runtime / required).is_file():
         raise ValueError(f'运行时缺少 {required}')
+
+
+def runtime_id():
+    """运行时内容的标识：由 FCL 的版本与本脚本决定。启动器按它决定是否需要重新解压运行时，
+    运行时没有变化时更新应用不必重新复制（Java 运行时有几百 MB）。"""
+    digest = hashlib.sha256(Path(__file__).read_bytes())
+    try:
+        commit = subprocess.run(['git', '-C', str(fcl), 'rev-parse', 'HEAD'], check=True, capture_output=True, text=True).stdout
+        digest.update(commit.strip().encode())
+    except (OSError, subprocess.CalledProcessError):
+        # 不是 Git 仓库时按文件列表与大小计算
+        for f in sorted(runtime.rglob('*')):
+            if f.is_file():
+                digest.update(f'{f.relative_to(runtime).as_posix()}:{f.stat().st_size}\n'.encode())
+    return digest.hexdigest()[:12]
+
+
+# 文件名不能以「.」开头，否则打包时会被当作隐藏文件忽略
+(runtime / 'runtime-id.txt').write_text(runtime_id())
 
 # MobileGlues 使用 LGPL-2.1，随 APK 附带其许可
 with zipfile.ZipFile(fcl / 'FCL/libs/MobileGlues-release.aar') as aar:

@@ -33,12 +33,26 @@ final class GameRuntime {
     static final String[] JAVA_RUNTIMES = {"java17", "java21", "java25"};
 
     /**
-     * 把运行时从 APK 复制到应用目录。每个应用版本使用自己的目录，避免更新中断留下不完整的运行时；
+     * 运行时内容的标识（打包时由 prepare-runtime.py 生成）。运行时没有变化时，更新应用后继续使用已经解压的运行时。
+     */
+    private static String runtimeId(Context context) {
+        try (InputStream in = context.getAssets().open("runtime/runtime-id.txt")) {
+            byte[] bytes = new byte[64];
+            int length = in.read(bytes);
+            String id = length > 0 ? new String(bytes, 0, length, java.nio.charset.StandardCharsets.UTF_8).trim() : "";
+            if (id.matches("[0-9a-f]{6,64}")) return id;
+        } catch (IOException ignored) {
+        }
+        return String.valueOf(BuildConfig.VERSION_CODE);
+    }
+
+    /**
+     * 把运行时从 APK 复制到应用目录。每个运行时版本使用自己的目录，避免更新中断留下不完整的运行时；
      * 各个 Java 只在第一次使用时复制，旧版本留下的运行时目录一并删除。
      */
     static File install(Context context, String java) throws IOException {
         if (!Arrays.asList(JAVA_RUNTIMES).contains(java)) throw new IOException("不支持的 Java 运行时：" + java);
-        File root = new File(context.getFilesDir(), "runtime-" + BuildConfig.VERSION_CODE);
+        File root = new File(context.getFilesDir(), "runtime-" + runtimeId(context));
         File[] old = context.getFilesDir().listFiles((dir, name) -> name.startsWith("runtime-") && !name.equals(root.getName()));
         if (old != null) for (File dir : old) deleteTree(dir);
         File marker = new File(root, ".ready");
@@ -151,10 +165,17 @@ final class GameRuntime {
     private static int compareVersion(String a, String b) {
         String[] pa = a.split("\\."), pb = b.split("\\.");
         for (int i = 0; i < Math.max(pa.length, pb.length); i++) {
-            int x = i < pa.length ? Integer.parseInt(pa[i]) : 0, y = i < pb.length ? Integer.parseInt(pb[i]) : 0;
+            int x = i < pa.length ? number(pa[i]) : 0, y = i < pb.length ? number(pb[i]) : 0;
             if (x != y) return Integer.compare(x, y);
         }
         return 0;
+    }
+
+    /** 版本号中的一段；带后缀（如 0-jpms）时取开头的数字。 */
+    private static int number(String part) {
+        int end = 0;
+        while (end < part.length() && end < 9 && Character.isDigit(part.charAt(end))) end++;
+        return end == 0 ? 0 : Integer.parseInt(part.substring(0, end));
     }
 
     /**
@@ -279,6 +300,11 @@ final class GameRuntime {
         args.add("-XX:ActiveProcessorCount=" + Runtime.getRuntime().availableProcessors());
         args.add("-Dext.net.resolvPath=" + resolv.getAbsolutePath());
         args.add("-Dos.name=Linux");
+        // 与 FCL 相同：Android 上 Java 读不到系统时区与语言，不设置时游戏内的时间按 UTC 显示
+        args.add("-Dos.version=Android-" + android.os.Build.VERSION.RELEASE);
+        args.add("-Duser.timezone=" + TimeZone.getDefault().getID());
+        args.add("-Duser.language=" + Locale.getDefault().getLanguage());
+        args.add("-Duser.country=" + Locale.getDefault().getCountry());
         args.add("-Dorg.lwjgl.opengl.libname=" + glLibrary);
         args.add("-Dorg.lwjgl.egl.libname=" + eglLibrary);
         args.add("-Dorg.lwjgl.openal.libname=" + nativeDir + "/libopenal.so");

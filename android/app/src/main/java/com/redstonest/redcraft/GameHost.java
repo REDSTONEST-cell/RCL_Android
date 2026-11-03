@@ -234,10 +234,21 @@ public final class GameHost {
             }
         });
     }
+    /** 手机版的版本号（显示在设置页）。 */
+    @JavascriptInterface public String appVersion() {
+        try {
+            return activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
+        } catch (Exception error) {
+            return "";
+        }
+    }
     @JavascriptInterface public void start(String session) {
         if (!session.matches("[0-9a-f-]{36}")) return;
-        activity.runOnUiThread(() -> activity.startActivity(
-            new Intent(activity, GameActivity.class).putExtra("session", session)));
+        // 一个进程只能创建一次 JVM：上一次的游戏或安装器进程还没结束时（例如卡住后被切到后台），先结束它再启动
+        boolean stale = stop();
+        Runnable launch = () -> activity.startActivity(new Intent(activity, GameActivity.class).putExtra("session", session));
+        if (stale) new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(launch, 800);
+        else activity.runOnUiThread(launch);
     }
     /**
      * 在 :jvm 进程中运行一次 Java 程序（安装器等，见 JavaService）。一个进程只能创建一次 JVM，
@@ -249,12 +260,18 @@ public final class GameHost {
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
             activity.startService(new Intent(activity, JavaService.class).putExtra("session", session)), 800);
     }
-    @JavascriptInterface public void stop() {
+    /** 结束 :jvm 进程（游戏或安装器）；返回是否有进程被结束。 */
+    @JavascriptInterface public boolean stop() {
         ActivityManager manager = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
-        if (manager.getRunningAppProcesses() == null) return;
-        for (ActivityManager.RunningAppProcessInfo process : manager.getRunningAppProcesses()) {
-            if ((activity.getPackageName() + ":jvm").equals(process.processName))
+        java.util.List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
+        if (processes == null) return false;
+        boolean killed = false;
+        for (ActivityManager.RunningAppProcessInfo process : processes) {
+            if ((activity.getPackageName() + ":jvm").equals(process.processName)) {
                 android.os.Process.killProcess(process.pid);
+                killed = true;
+            }
         }
+        return killed;
     }
 }
