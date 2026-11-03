@@ -204,8 +204,7 @@ final class GameRuntime {
         String jna = jnaDirectory(root, original, natives);
         String libraryPath = NativeLibraryPaths.linker(java,natives,nativeDir);
         String environmentPath = NativeLibraryPaths.environment(natives,nativeDir);
-        // 渲染器（环境变量与 FCL 相同）：GL4ES 支持到 1.21.4，NG-GL4ES 用于 1.21.5 ~ 26.2，
-        // 26.3 起游戏改用 SDL3 管理窗口，使用 MobileGlues
+        // 渲染器（环境变量与 FCL 相同）：GL4ES 支持到 1.21.4，NG-GL4ES 用于 1.21.5 ~ 1.21.x，26.x 使用 MobileGlues
         String renderer = request.optString("renderer", "gl4es");
         boolean ng = "ng_gl4es".equals(renderer);
         boolean mg = "mobileglues".equals(renderer);
@@ -224,11 +223,13 @@ final class GameRuntime {
             bridge.setenv("POJAV_RENDERER", "opengles3_mobileglues");
             bridge.setenv("LIBGL_ES", "3");
             bridge.setenv("LIBGL_EGL", "libmobileglues.so");
-            // MobileGlues 的配置目录放在应用私有存储，不使用 /sdcard/MG
-            File mgDir = new File(activity.getFilesDir(), "mobileglues");
+            // MobileGlues 的配置目录放在应用私有存储，不使用 /sdcard/MG。
+            // 26.3 起需要 ANGLE 后端，与直接使用驱动 GLES 的 26.1 ~ 26.2 分开存放配置
+            boolean angle = request.optBoolean("angle", false);
+            File mgDir = new File(activity.getFilesDir(), angle ? "mobileglues-angle" : "mobileglues");
             if (!mgDir.isDirectory() && !mgDir.mkdirs()) throw new IOException("无法创建 MobileGlues 配置目录");
             bridge.setenv("MG_DIR_PATH", mgDir.getAbsolutePath());
-            writeMobileGluesConfig(mgDir);
+            if (angle) writeMobileGluesConfig(mgDir);
         } else if (ng) {
             bridge.setenv("POJAV_RENDERER", "opengles3");
             bridge.setenv("LIBGL_ES", "3");

@@ -45,7 +45,12 @@ public final class GameActivity extends JVMActivity {
                 bridge.setGameDir(request.getString("cwd"));
                 bridge.setJava("17");
                 bridge.setRenderer("GL4ES");
-                bridge.setThread(new Thread(this::runGame, "RCL-JVM"));
+                bridge.setScaleFactor(savedWindowScale());
+                // 与 FCL 相同：游戏线程（JVM 的主线程与渲染线程沿用它的优先级）使用最高优先级，
+                // 否则在大小核手机上渲染线程容易被调度到小核，严重卡顿、声音断续
+                Thread game = new Thread(this::runGame, "RCL-JVM");
+                game.setPriority(Thread.MAX_PRIORITY);
+                bridge.setThread(game);
                 JVMActivity.setFCLBridge(bridge, MenuType.GAME);
             } catch (Exception error) {
                 failure = error;
@@ -56,6 +61,18 @@ public final class GameActivity extends JVMActivity {
             finish();
         } else if (failure != null) {
             showError(failure);
+        }
+    }
+
+    /** 游戏内菜单中保存的分辨率缩放（与 FCL 相同，启动时生效；游戏中修改会实时应用）。 */
+    private double savedWindowScale() {
+        try {
+            File file = new File(FCLPath.FILES_DIR, "menu_setting.json");
+            if (!file.isFile()) return 1.0;
+            double scale = new JSONObject(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)).optDouble("windowScale", 1.0);
+            return scale > 0.1 && scale <= 1.0 ? scale : 1.0;
+        } catch (Exception e) {
+            return 1.0;
         }
     }
 
