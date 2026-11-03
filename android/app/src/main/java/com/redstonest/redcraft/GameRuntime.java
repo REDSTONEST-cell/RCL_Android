@@ -257,9 +257,13 @@ final class GameRuntime {
         disableForgeSplash(cwd);
         if (request.optBoolean("disableEarlyWindow", false)) disableEarlyWindow(cwd);
         if (lwjgl341) {
-            // 26.x 可以选择 Vulkan 绘图；手机版的渲染器是 OpenGL，固定使用 OpenGL
+            // 26.x 可以用 Vulkan 绘图。很多手机 GPU（如 Mali）只提供 KHR 版的 vertex_attribute_divisor，
+            // 缺少游戏要求的 EXT 版；与 FCL 相同，经 vkshim 包装系统 Vulkan 补上（驱动原生支持时直通）。
+            // 26.3 的新着色器无法在 GLES（包括 ANGLE）上编译，交给游戏自动选择后端（可用时为 Vulkan）；
+            // 26.1 ~ 26.2 使用 OpenGL（MobileGlues）
+            bridge.setenv("VKSHIM_ENABLE", "1");
             com.tungsten.fcl.setting.GameOption option = new com.tungsten.fcl.setting.GameOption(cwd);
-            option.set("preferredGraphicsBackend", "opengl");
+            option.set("preferredGraphicsBackend", request.optBoolean("angle", false) ? "default" : "opengl");
             option.save();
         }
         File resolv = writeResolvConf(activity, root);

@@ -47,6 +47,13 @@ public final class JavaService extends Service {
         // FCL 的部分类（如 SdlSettings）在初始化时读取应用 Context 与路径，游戏界面中由 GameActivity 设置
         FCLApp.attach(this);
         FCLPath.loadPaths(this);
+        // CallbackBridge 的类初始化会获取 Choreographer，只能在有 Looper 的线程上进行（与 FCL 相同的限制）；
+        // 这里在主线程上先完成初始化，之后运行线程中的 FCLBridge.execute 才能使用它
+        try {
+            Class.forName("org.lwjgl.glfw.CallbackBridge", true, getClassLoader());
+        } catch (Throwable error) {
+            log("\n" + Log.getStackTraceString(error) + "\n");
+        }
         new Thread(this::run, "RCL-Java").start();
         return START_NOT_STICKY;
     }
