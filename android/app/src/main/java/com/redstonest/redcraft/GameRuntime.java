@@ -291,6 +291,9 @@ final class GameRuntime {
         option.save();
         File resolv = writeResolvConf(activity, root);
         activity.appendLog("[RCL] 运行环境 " + new File(java).getName() + " · LWJGL " + (lwjgl341 ? "3.4.1" : "3.3.3") + " · " + rendererName + " · JNA " + new File(jna).getName() + "，画面尺寸 " + width + "x" + height + "\n");
+        JSONObject memory = request.optJSONObject("memory");
+        if (memory != null) activity.appendLog(String.format(Locale.ROOT, "[RCL] 游戏内存 %d MB（手机共 %.1f GB，启动前可用 %.1f GB）\n",
+            memory.optLong("heap"), memory.optLong("total") / 1024.0, memory.optLong("available") / 1024.0));
         ArrayList<String> args = new ArrayList<>();
         args.add(java + "/bin/java");
         args.add("-Djava.home=" + java);
