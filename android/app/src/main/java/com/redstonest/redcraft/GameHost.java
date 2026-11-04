@@ -234,6 +234,53 @@ public final class GameHost {
             }
         });
     }
+    // ─── 与 FCL 相同：下载时持有唤醒锁与 WiFi 锁 ───
+    private android.os.PowerManager.WakeLock downloadWakeLock;
+    private android.net.wifi.WifiManager.WifiLock downloadWifiLock;
+
+    /** 有任务进行时保持 CPU 与 WiFi 活跃，关屏或切到后台时下载不中断；任务全部结束后释放。 */
+    @JavascriptInterface public synchronized void keepAwake(boolean on) {
+        try {
+            if (on && downloadWakeLock == null) {
+                downloadWakeLock = ((android.os.PowerManager) activity.getSystemService(Context.POWER_SERVICE))
+                    .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "RCL:download");
+                downloadWakeLock.acquire();
+                downloadWifiLock = ((android.net.wifi.WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE))
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "RCL:download");
+                downloadWifiLock.acquire();
+            } else if (!on && downloadWakeLock != null) {
+                if (downloadWakeLock.isHeld()) downloadWakeLock.release();
+                downloadWakeLock = null;
+                if (downloadWifiLock != null && downloadWifiLock.isHeld()) downloadWifiLock.release();
+                downloadWifiLock = null;
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    // ─── 麦克风权限（游戏内的语音聊天等，由玩家在设置中授权） ───
+    private static final int REQUEST_MICROPHONE = 4104;
+
+    @JavascriptInterface public boolean hasMicrophone() {
+        return activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** 请求麦克风权限；被拒绝且系统不再弹出询问时，打开应用设置页让玩家手动开启。 */
+    @JavascriptInterface public void requestMicrophone() {
+        activity.runOnUiThread(() -> {
+            if (hasMicrophone()) return;
+            android.content.SharedPreferences prefs = activity.getSharedPreferences("rcl", Context.MODE_PRIVATE);
+            boolean asked = prefs.getBoolean("microphone_asked", false);
+            if (!asked || activity.shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO)) {
+                prefs.edit().putBoolean("microphone_asked", true).apply();
+                activity.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, REQUEST_MICROPHONE);
+            } else {
+                activity.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", activity.getPackageName(), null)));
+            }
+        });
+    }
+
     /** 手机版的版本号（显示在设置页）。 */
     @JavascriptInterface public String appVersion() {
         try {

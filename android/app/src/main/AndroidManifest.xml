@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 以下与 FCL 相同 -->
+    <!-- 写入游戏的 DNS 配置时读取当前网络 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 下载时保持 CPU 与 WiFi 活跃，关屏或切到后台时下载不中断 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 按键与手柄的震动 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 陀螺仪超过 200Hz 的采样率 -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+    <!-- 游戏内使用麦克风（如语音聊天 Mod），在设置中由玩家授权 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:glEsVersion="0x00020000" />
     <!-- 游戏运行时的保活前台服务（与 FCL 的 GameService 相同） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -56,6 +69,10 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keep game process alive while a Minecraft session is running" />
         </service>
+        <!-- 与 FCL 相同：声明支持系统的游戏模式（Android 13） -->
+        <meta-data
+            android:name="android.game_mode_config"
+            android:resource="@xml/game_mode_config" />
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

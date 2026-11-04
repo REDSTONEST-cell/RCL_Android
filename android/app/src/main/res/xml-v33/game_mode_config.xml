@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 与 FCL 相同：Android 13 的游戏模式，支持系统的性能模式与省电模式，不允许系统降低分辨率或修改帧率 -->
+<game-mode-config xmlns:android="http://schemas.android.com/apk/res/android"
+    android:allowGameFpsOverride="false"
+    android:allowGameDownscaling="false"
+    android:supportsBatteryGameMode="true"
+    android:supportsPerformanceGameMode="true" />
