@@ -372,6 +372,13 @@ final class GameRuntime {
             args.add(arg);
         }
         if (!wrapped) throw new IOException("启动参数中缺少主类 " + mainClass);
+        if (lwjgl341 && request.optBoolean("angle", false)) {
+            // 26.3 起可以用启动参数指定图形后端，游戏内的设置会被忽略。只写 options.txt 不可靠：新建版本第一次启动时
+            // options.txt 没有版本号，游戏的数据修正会把它改回「默认」（默认先试 OpenGL），Forge / NeoForge 因此
+            // 用 OpenGL 加载，透明度着色器编译失败。Vulkan 不可用时游戏仍会退回 OpenGL。
+            args.add("--graphicsBackend");
+            args.add("vulkan");
+        }
         activity.appendLog("[RCL] JVM 参数生成完成，准备设置退出回调\n");
         bridge.setupExitTrap(bridge);
         activity.appendLog("[RCL] 退出回调设置完成，准备初始化本地 hooks\n");
