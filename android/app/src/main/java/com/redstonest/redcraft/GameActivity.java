@@ -94,6 +94,7 @@ public final class GameActivity extends JVMActivity {
         try {
             File root = GameRuntime.install(this, request.optString("java", "java17"));
             writeStatus("running", null);
+            AudioPriority.watch(this);
             int code = GameRuntime.launch(this, bridge, request, root, CallbackBridge.windowWidth, CallbackBridge.windowHeight);
             onGameExit(code);
         } catch (Throwable error) {

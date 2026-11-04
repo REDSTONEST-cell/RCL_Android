@@ -128,6 +128,19 @@ final class GameRuntime {
     }
 
     /**
+     * OpenAL Soft 的配置：加大输出缓冲（每段 1024 帧 × 4 段，48kHz 下约 85 毫秒）。
+     * 混音线程在 CPU 繁忙时稍有延迟，缓冲太小时就会播放中断，声音变成快速的「哒哒哒」。
+     */
+    private static File writeOpenAlConfig(File root) {
+        File file = new File(root, "alsoft.conf");
+        try {
+            Files.write(file.toPath(), "[general]\nperiod_size = 1024\nperiods = 4\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException ignored) {
+        }
+        return file;
+    }
+
+    /**
      * MobileGlues 的配置：与 FCL 的默认设置相同，设备支持时使用 ANGLE（GLES on Vulkan）作为后端。
      * 直接使用驱动的 GLES 时，26.3 的部分着色器（按变量下标写输出数组）无法编译，游戏会在加载时崩溃。
      * 只补充缺少的键，不覆盖已有的设置。
@@ -240,6 +253,7 @@ final class GameRuntime {
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
+        bridge.setenv("ALSOFT_CONF", writeOpenAlConfig(root).getAbsolutePath());
         if (mg) {
             bridge.setenv("POJAV_RENDERER", "opengles3_mobileglues");
             bridge.setenv("LIBGL_ES", "3");
