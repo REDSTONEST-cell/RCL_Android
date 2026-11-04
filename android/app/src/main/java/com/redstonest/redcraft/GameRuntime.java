@@ -128,15 +128,28 @@ final class GameRuntime {
     }
 
     /**
-     * OpenAL Soft 的配置：加大输出缓冲（每段 1024 帧 × 4 段，48kHz 下约 85 毫秒）。
-     * 混音线程在 CPU 繁忙时稍有延迟，缓冲太小时就会播放中断，声音变成快速的「哒哒哒」。
+     * OpenAL Soft 的配置。
+     *
+     * 声音与系统输出的采样率相同时（通常是 48kHz），系统会走低延迟的快速输出：缓冲只有几毫秒，混音稍有延迟就会断开，
+     * 声音变成快速的「哒哒哒」。录屏时系统要把声音同时送去录制，会改走普通的混音输出，这时就不会出现。
+     * 这里与录屏时一样走普通输出：采样率与系统输出不同（由系统混音时重采样），并加大 OpenAL 自己的缓冲。
      */
-    private static File writeOpenAlConfig(File root) {
-        File file = new File(root, "alsoft.conf");
+    private static File writeOpenAlConfig(GameActivity activity, File root) {
+        int system = 48000;
         try {
-            Files.write(file.toPath(), "[general]\nperiod_size = 1024\nperiods = 4\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            android.media.AudioManager audio = (android.media.AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+            String rate = audio == null ? null : audio.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
+            if (rate != null) system = Integer.parseInt(rate.trim());
+        } catch (RuntimeException ignored) {
+        }
+        int frequency = system == 44100 ? 48000 : 44100;
+        File file = new File(root, "alsoft.conf");
+        String config = "[general]\nfrequency = " + frequency + "\nperiod_size = 1024\nperiods = 4\n";
+        try {
+            Files.write(file.toPath(), config.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (IOException ignored) {
         }
+        activity.appendLog("[RCL] 声音输出 " + frequency + "Hz（系统输出 " + system + "Hz），缓冲 4 × 1024 帧\n");
         return file;
     }
 
@@ -253,7 +266,7 @@ final class GameRuntime {
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
-        bridge.setenv("ALSOFT_CONF", writeOpenAlConfig(root).getAbsolutePath());
+        bridge.setenv("ALSOFT_CONF", writeOpenAlConfig(activity, root).getAbsolutePath());
         if (mg) {
             bridge.setenv("POJAV_RENDERER", "opengles3_mobileglues");
             bridge.setenv("LIBGL_ES", "3");
