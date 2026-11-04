@@ -337,4 +337,7 @@
     <declare-styleable name="LogWindow">
         <attr name="auto_log_tint" format="boolean" />
     </declare-styleable>
-    </resources>
+    <string name="game_service_channel">Game running</string>
+    <string name="game_service_notification_title">Game running</string>
+    <string name="game_service_notification_text">Tap to return to the game</string>
+</resources>

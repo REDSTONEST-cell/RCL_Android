@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 游戏运行时的保活前台服务（与 FCL 的 GameService 相同） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <!-- JVM 会使用指针的高位，关闭 Android 11+ 的堆指针标记，否则 JVM 启动即被系统终止（与 FCL 相同）。 -->
+    <!-- 与 FCL 相同声明为游戏：系统的游戏模式与手机厂商的游戏加速按它识别游戏，否则按普通应用调度 -->
     <application
+        android:appCategory="game"
+        android:isGame="true"
         android:allowNativeHeapPointerTagging="false"
         android:largeHeap="true"
         android:extractNativeLibs="true"
@@ -40,6 +47,15 @@
             android:name=".JavaService"
             android:process=":jvm"
             android:exported="false" />
+        <service
+            android:name="com.mio.service.GameService"
+            android:process=":jvm"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keep game process alive while a Minecraft session is running" />
+        </service>
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

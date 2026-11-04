@@ -27,6 +27,7 @@ import com.redstonest.redcraft.R;
 import com.tungsten.fcl.control.GameMenu;
 import com.tungsten.fcl.control.MenuCallback;
 import com.tungsten.fcl.control.MenuType;
+import com.mio.service.GameService;
 import com.tungsten.fcl.control.view.MenuView;
 import com.tungsten.fcl.game.sdl.SdlBridge;
 import com.tungsten.fcl.setting.GameOption;
@@ -108,6 +109,7 @@ public class JVMActivity extends FCLActivity implements TextureView.SurfaceTextu
 
         menu = new GameMenu();
         menu.setup(this, fclBridge);
+        GameService.start(this);
         textureView = findViewById(R.id.texture_view);
         textureView.setSurfaceTextureListener(this);
         if (FCLBridge.FORCE_RESOLUTION) {
@@ -489,6 +491,7 @@ public class JVMActivity extends FCLActivity implements TextureView.SurfaceTextu
         }
         CallbackBridge.resetInputState();
         SdlBridge.reset();
+        GameService.stop(this);
         super.onDestroy();
     }
 

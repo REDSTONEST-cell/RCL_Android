@@ -223,4 +223,7 @@
     <string name="view_info_width_reference">宽度参考对象</string>
     <string name="view_info_x">X 坐标</string>
     <string name="view_info_y">Y 坐标</string>
-    </resources>
+    <string name="game_service_channel">游戏运行</string>
+    <string name="game_service_notification_title">游戏运行中</string>
+    <string name="game_service_notification_text">点击返回游戏</string>
+</resources>

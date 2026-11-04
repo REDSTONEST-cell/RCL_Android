@@ -5,7 +5,8 @@
 
 RCL 的修改：
 
-- `JVMActivity`：去掉联机（Terracotta）、前台服务与语音朗读；新增 `onGameExit`，由 RCL 的 `GameActivity` 把退出码写回启动器。
+- `JVMActivity`：去掉联机（Terracotta）与语音朗读；新增 `onGameExit`，由 RCL 的 `GameActivity` 把退出码写回启动器。
+- `GameService`（游戏运行时的保活前台服务）与 FCL 相同，运行在游戏所在的 `:jvm` 进程；通知点击后回到 RCL 的 `GameActivity`。
 - `GameMenu`：去掉 TouchController 与联机菜单；记住选择的按键布局；游戏日志只追加写入。
 - 悬浮菜单按钮的图标换成 RCL 的图标（`R.drawable.rcl_menu_button`）。
 - `FCLApp`、`FCLPath`、`AndroidUtil.kt`、`AppSettings.kt`、主题相关类改为精简实现：路径都在应用私有目录，主题固定为 RCL 配色，不使用 DataStore。
