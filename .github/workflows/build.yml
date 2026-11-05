@@ -2,7 +2,7 @@ name: 构建
 
 on:
   push:
-    branches: [main, test/openal-sample-rate]
+    branches: [main, feat/android-updater]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -67,6 +67,13 @@ jobs:
             echo "RCL_KEYSTORE=$RUNNER_TEMP/rcl.jks" >> "$GITHUB_ENV"
           fi
 
+      - name: 检查更新逻辑与界面
+        working-directory: red_craft
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+          cargo test -p launcher-core update::tests --lib
+
       - name: 打包
         env:
           RCL_KEYSTORE_PASSWORD: ${{ secrets.RCL_KEYSTORE_PASSWORD }}
@@ -88,7 +95,7 @@ jobs:
 
   release:
     name: 发布 Release
-    if: inputs.release_tag != ''
+    if: inputs.release_tag != '' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release:'))
     needs: apk
     runs-on: ubuntu-latest
     permissions:
@@ -104,8 +111,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release_tag }}
         run: |
-          version="${TAG#v}"
           expected="$(grep '^versionName=' android/version.properties | cut -d= -f2)"
+          [ -n "$TAG" ] || TAG="v$expected"
+          version="${TAG#v}"
           if [ "$version" != "$expected" ]; then
             echo "发布版本号 $TAG 与 android/version.properties 中的 $expected 不一致" >&2
             exit 1

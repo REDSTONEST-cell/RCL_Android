@@ -27,11 +27,12 @@ public final class GameHost {
     private static final int PICK_FILES = 4101, PICK_FOLDER = 4102, SAVE_FILE = 4103;
     private final Activity activity;
     private final WebView webView;
+    private final UpdateInstaller updater;
     /** 正在等待系统界面返回的请求：前端回调 id，以及要保存的文件 */
     private String pendingId;
     private File pendingSave;
 
-    public GameHost(Activity activity, WebView webView) { this.activity = activity; this.webView = webView; }
+    public GameHost(Activity activity, WebView webView) { this.activity = activity; this.webView = webView; this.updater = new UpdateInstaller(activity); }
 
     // ─── 文件导入导出 ───
     // 手机上不能用电脑版的「选择路径」方式：系统选择器返回的是 content:// 地址，启动器无法按路径读写，
@@ -80,6 +81,7 @@ public final class GameHost {
 
     /** 由 MainActivity 转交系统界面的返回结果；不是这里发起的请求返回 false。 */
     public boolean onActivityResult(int code, int result, Intent data) {
+        if (updater.onActivityResult(code)) return true;
         if (code != PICK_FILES && code != PICK_FOLDER && code != SAVE_FILE) return false;
         String id = pendingId;
         File save = pendingSave;
@@ -277,6 +279,16 @@ public final class GameHost {
             } else {
                 activity.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.fromParts("package", activity.getPackageName(), null)));
+            }
+        });
+    }
+
+    @JavascriptInterface public void installUpdate(String id) {
+        updater.install(message -> {
+            if (message != null) deliver(id, error(message));
+            else {
+                try { deliver(id, new JSONObject().put("ok", true)); }
+                catch (Exception e) { deliver(id, error("无法返回安装状态")); }
             }
         });
     }
