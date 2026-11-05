@@ -128,6 +128,33 @@ final class GameRuntime {
     }
 
     /**
+     * 外放异响的采样率对照实验：只设置输出频率，不调整缓冲或线程优先级。
+     * 请求与系统报告值不同的采样率；实际采用值与输出路径仍需真机验证。
+     */
+    private static File writeOpenAlConfig(GameActivity activity, File sessionDir) throws IOException {
+        int systemRate = 0;
+        try {
+            android.media.AudioManager audio =
+                (android.media.AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+            String value = audio == null ? null
+                : audio.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
+            if (value != null) systemRate = Integer.parseInt(value.trim());
+        } catch (RuntimeException error) {
+            activity.appendLog("[RCL] 无法读取系统采样率，使用实验默认值 44100Hz\n");
+        }
+        int requestedRate = systemRate == 44100 ? 48000 : 44100;
+        File config = new File(sessionDir, "alsoft-sample-rate.conf");
+        // 每次启动覆盖本次会话配置，避免旧实验的缓冲设置残留。
+        Files.write(config.toPath(), ("[general]\nfrequency = " + requestedRate + "\n")
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        activity.appendLog("[RCL] 采样率实验：系统报告 "
+            + (systemRate > 0 ? systemRate + "Hz" : "未知")
+            + "，请求 OpenAL 输出 " + requestedRate
+            + "Hz（实际输出待验证）；配置 " + config.getAbsolutePath() + "\n");
+        return config;
+    }
+
+    /**
      * MobileGlues 的配置：与 FCL 的默认设置相同，设备支持时使用 ANGLE（GLES on Vulkan）作为后端。
      * 直接使用驱动的 GLES 时，26.3 的部分着色器（按变量下标写输出数组）无法编译，游戏会在加载时崩溃。
      * 只补充缺少的键，不覆盖已有的设置。
@@ -240,6 +267,7 @@ final class GameRuntime {
             {"ALSOFT_DRIVERS", "opensl"}, {"FORCE_VSYNC", "false"}
         };
         for (String[] pair : env) bridge.setenv(pair[0], pair[1]);
+        bridge.setenv("ALSOFT_CONF", writeOpenAlConfig(activity, log.getParentFile()).getAbsolutePath());
         if (mg) {
             bridge.setenv("POJAV_RENDERER", "opengles3_mobileglues");
             bridge.setenv("LIBGL_ES", "3");
